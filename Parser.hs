@@ -48,8 +48,8 @@ parseExpr =  parseApp
 		 <|> parseLambda
 		 <|> parseBinop
 		 <|> (VarS <$> parseVar)
-		 <|> (BoolS <$> parseBool)
-		 <|> (ValS <$> parseInt)
+		 <|> parseBool
+		 <|> parseInt
 		 <|> parseIF
 		 <|> parseLet
 
@@ -74,31 +74,21 @@ parseVar = P $ \inp -> case inp of
 				(VarT x):_ -> [(x,[])]
 				otherwise -> []
 
-parseInt :: Parser Token Integer
-parseInt = P $ \inp -> case inp of
-				(IntT n):_ -> [(n,[])]
-				otherwise -> []
+parseInt :: Parser Token SExpr
+parseInt = (\(IntT n) -> ValS n) <$> pSatisfy isIntTok where
+	isIntTok t = case t of
+		IntT _ -> True
+		otherwise -> False
 
-parseBool :: Parser Token Bool
-parseBool = P $ \inp -> case inp of
-				(BoolT b):_ -> [(b,[])]
-				otherwise -> []
+parseBool :: Parser Token SExpr
+parseBool = (\(BoolT b) -> BoolS b) <$> pSatisfy isBoolTok where
+	isBoolTok t = case t of
+		BoolT _ -> True
+		otherwise -> False
+
 
 parseOp :: Parser Token Op
-parseOp = P $ \inp -> case inp of
-				(AddT):_ -> [(Add,[])]
-				(SubT):_ -> [(Sub,[])]
-				(MulT):_ -> [(Mul,[])]
-				(DivT):_ -> [(Div,[])]
-				(ModT):_ -> [(Mod,[])]
-				(EqT):_ -> [(Eq,[])]
-				(GtT):_-> [(Gt,[])]
-				(LtT):_ -> [(Lt,[])]
-				(LeqT):_ -> [(Leq,[])]
-				(GeqT):_ -> [(Geq,[])]
-				(ANDT):_ -> [(AND,[])]
-				(ORT):_ -> [(OR,[])]
-				otherwise -> []
+parseOp = undefined
 
 
 
