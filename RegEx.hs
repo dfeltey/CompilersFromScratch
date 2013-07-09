@@ -8,7 +8,13 @@ data RegEx c = Null
              | Alt (RegEx c) (RegEx c)
              | Seq (RegEx c) (RegEx c)
              | Star (RegEx c)
-             
+
+notNull :: RegEx c -> Bool
+notNull Null = False
+notNull _ = True
+
+word :: String -> RegEx Char 
+word s = foldr seq Eps (map symC s) 
 
 symC :: (Eq c) => c -> RegEx c
 symC c = Sym (==c)
