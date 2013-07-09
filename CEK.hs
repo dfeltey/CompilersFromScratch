@@ -38,7 +38,8 @@ applyOp op (VBool b1) (VBool b2) = case op of
                                 Eq -> VBool $ b1 == b2
                                 OR -> VBool $ b1 || b2
                                 AND -> VBool $ b1 && b2
-applyOp _ _ _ = error "Error: Operation not supported"
+                                otherwise -> error $ "Error: Operation: " ++ show op ++ " is not supported on boolean arguments."
+applyOp op v1 v2 = error $ "Error: Operation: " ++ show op ++ " is not supported on these arguments."
 
 data Op = Add
         | Sub
