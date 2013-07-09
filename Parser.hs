@@ -6,40 +6,6 @@ import Lex
 import SExpr
 import CEK
 
-
-{-
-data SExpr = AppS SExpr SExpr
-          | LambdaS Name SExpr
-          | BinopS Op SExpr SExpr
-          | VarS Name
-          | ValS Integer
-          | BoolS Bool
-          | IFS SExpr SExpr SExpr
-          | LetS (Name,SExpr) SExpr 
-          deriving(Show
-
-
-data Token  = LParenT
-			| RParenT
-			| SpaceT
-			| LambdaT
-			| AddT
-			| MulT
-			| DivT
-			| SubT
-			| ModT
-			| EqT
-			| LtT
-			| GtT
-			| LeqT
-			| GeqT
-			| LetT
-			| IntT Integer
-			| BoolT Bool
-			| VarT Name
-			deriving(Show)
-
--}
 wrap :: Parser Token a ->  Parser Token a
 wrap p = pSym LParenT *> p <* pSym RParenT
 
@@ -47,7 +13,7 @@ parseExpr :: Parser Token SExpr
 parseExpr =  parseApp
 		 <|> parseLambda
 		 <|> parseBinop
-		 <|> (VarS <$> parseVar)
+		 <|> parseVar
 		 <|> parseBool
 		 <|> parseInt
 		 <|> parseIF
@@ -57,22 +23,24 @@ parseApp :: Parser Token SExpr
 parseApp = wrap $ AppS <$> parseExpr <*> parseExpr
 
 parseLambda :: Parser Token SExpr
-parseLambda = wrap $ LambdaS <$> parseVar <*> parseExpr 
+parseLambda = wrap $ (\(VarS x) -> LambdaS x) <$> (pSym LambdaT *> parseVar) <*> parseExpr 
 
 parseBinop :: Parser Token SExpr
-parseBinop = wrap $ BinopS <$> parseOp <*> parseExpr <*> parseExpr
+parseBinop = wrap $ (\opT -> BinopS (fromT opT)) <$> parseOp <*> parseExpr <*> parseExpr
 
 parseIF :: Parser Token SExpr
 parseIF = wrap $ IFS <$> parseExpr <*> parseExpr <*> parseExpr
 
 parseLet :: Parser Token SExpr
-parseLet = wrap $ LetS <$> (wrap $ (,) <$> parseVar <*> parseExpr) <*> parseExpr 
+parseLet = wrap $ (\(VarS x,s) -> LetS (x,s)) <$> (wrap $ (,) <$> parseVar <*> parseExpr) <*> parseExpr 
 
 
-parseVar :: Parser Token Name
-parseVar = P $ \inp -> case inp of
-				(VarT x):_ -> [(x,[])]
-				otherwise -> []
+parseVar :: Parser Token SExpr
+parseVar = (\(VarT x) -> VarS x) <$> pSatisfy isVar where
+	isVar t = case t of
+		VarT _ -> True
+		otherwise -> False
+
 
 parseInt :: Parser Token SExpr
 parseInt = (\(IntT n) -> ValS n) <$> pSatisfy isIntTok where
@@ -87,15 +55,35 @@ parseBool = (\(BoolT b) -> BoolS b) <$> pSatisfy isBoolTok where
 		otherwise -> False
 
 
-parseOp :: Parser Token Op
-parseOp = undefined
+parseOp :: Parser Token Token
+parseOp = pChoice $ map pSym [ AddT
+							 , MulT
+							 , DivT
+							 , SubT
+							 , ModT
+							 , EqT
+							 , LtT
+							 , GtT
+							 , LeqT
+							 , GeqT
+							 , ANDT
+							 , ORT]
 
-
-
-
-
-
-
+fromT :: Token -> Op
+fromT t = case t of
+	AddT -> Add
+	MulT -> Mul
+	DivT -> Div
+	SubT -> Sub
+	ModT -> Mod
+	EqT -> Eq
+	LtT -> Lt
+	GtT -> Gt
+	LeqT -> Leq
+	GeqT -> Geq
+	ANDT -> AND
+	ORT  -> OR
+	_ -> error "not an operator"
 
 
 
