@@ -31,7 +31,7 @@ tokenize line char rules string = go line char rules string [] where
                                                                         case rules' of
                                                                             [] -> Left $ "Line: " ++ show line ++ " Char: " ++ show char ++ "\nError: Empty string unexpected"
                                                                             (r:rs) -> Right (snd r $ reverse s,[],line,char)
-                                  go line char rules (c:cs) s = let char' = char + 1
+                                  go line char rules (c:cs) s = let char' = if c == '\n' then 0 else (char + 1)
                                                                     line' = line + if c == '\n' then 1 else 0
                                                                     step = mapFst (derivative c) rules in
                                                                         case filter (\(a,b) -> notNull a) step of
@@ -40,19 +40,6 @@ tokenize line char rules string = go line char rules string [] where
                                                                                 [] -> Left $ "Line: " ++ show line ++ " Char: " ++ show char ++ "\nError: No matching regular expressions."
                                                                                 (r:rs) -> Right $ (snd r $ reverse s,(c:cs),line,char)
 
--------- Test --------
-{-
-data Token = AlphaT
-           | DigitT
-           | SpaceT
-           deriving(Show,Eq)
-
-testRules = [(Sym (isAlpha),const AlphaT)
-            ,(Sym(isDigit),const DigitT)
-            , (Sym (isSpace),const SpaceT)
-            ]
-
--}
 
 
 
