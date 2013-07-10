@@ -5,6 +5,8 @@ LambdaJam 2013 Workshop
 
 Some resources:
 
+http://sebfisch.github.io/haskell-regexp/
+
 http://matt.might.net/articles/implementation-of-regular-expression-matching-in-scheme-with-derivatives/
 
 http://www.mpi-sws.org/~turon/re-deriv.pdf
