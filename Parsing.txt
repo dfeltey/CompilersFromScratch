@@ -1,0 +1,567 @@
+% Parser Combinators and Compilers From The Ground Up
+% Dan Feltey
+% May 29, 2013
+
+
+# In This Talk
+
+## Some Big Ideas
+- An overview of compilation
+- Parser Combinators
+- Abstract Syntax Trees
+- Abstract Machines
+
+## Some Applications
+- Parsing arithmetic expressions
+- An abstract machine for arithmetic
+- Compiling arithmetic expressions
+
+# Compilation
+
+## The Compilation Process
+
+### A typical flow
+
+Source Code -> Lexer -> Parser -> Code Generator -> Machine Code
+
+> - Lexers usually consume source code and produce a list of tokens
+> - Parsers often consume tokens and produce parse trees
+> - There can be many intermediate operations on an abstract syntax tree
+> - Code Generators traverse the AST and produce lists of machine instructions
+
+## Our Goal Today
+
+We want to parse and compile expressions such as:
+
+- 1 + 2
+- 5 - 3
+- 7 * 7
+- 9 / 3
+- 3 * (4+3) + 6/2*(8 - 1)
+
+## A Grammer For Arithmetic Expressions
+
+    <Expr> ::= <Expr> + <Expr>
+    		|  <Expr> - <Expr>
+    		|  <Expr> * <Expr>
+    		|  <Expr> / <Expr>
+    		|  ( <Expr> )
+    		|  <Integer>
+
+
+> - Why won't this work very well?
+> - Precedence
+> - Ambiguity   
+
+## A Better Grammar For Arithmetic Expressions
+
+    <Expr>   ::= <Expr> + <Term>
+    		  |  <Expr> - <Term>
+    		  |  <Term>
+
+    <Term>   ::= <Term> * <Factor>
+    		  |  <Term> / <Factor>
+    		  |  <Factor>
+
+    <Factor> ::= ( <Expr> )
+              | <Integer>	
+
+# From the ground up
+
+## Abstract Machines
+
+- Models of computation or computers
+- Abstractions of real machines
+- Rules for evaluation
+
+## An Abstract Machine For Arithmetic
+
+### Reverse Polish Notation
+
+- Alternative notation for arithmetic expressions
+- 1 4 + 7 *   \  ==> \ 35
+
+### Evaluating RPN
+
+- Use a stack s (represented by a list in Haskell)
+- If we encounter an Integer push it on the stack
+- If we encounter an operation pop the top two elements of the stack and apply the operation
+
+## An Example
+
+Represent the current expression (e) and stack (s) as (e,s)
+
+### Evaluating \ (5 1 2 + 4 * + 3 -)
+
+> - Initial state: (5 1 2 + 4 * + 3 -, [])
+> - Pushing 5 onto the stack: (1 2 + 4 * + 3 -, [5])
+> - Push 1 on the stack: (2 + 4 * + 3 -, [1, 5])
+> - Push 2: (+ 4 * 3 -, [2, 1, 5])
+> - Pop and add top two elements: (4 * + 3 -, [3, 5])
+> - Push 4: (* + 3 -, [4, 3, 5]) 
+> - Pop and multiply top two elements: (+ 3 -, [12, 5])
+> - Pop and add top two elements: (3 -, [17])
+> - Push 3: (-, [3, 17])
+> - Pop and subtract top two elements (,[14])
+> - Result: 14
+
+## A Machine For Arithmetic
+
+RPN has two basic operations:
+
+- Push
+- Apply binary operations 
+
+Let's turn this into an "assembly language" with the operations
+
+- Push
+- Add
+- Sub
+- Mult
+- Div
+
+## An Executable Machine
+
+### Implementing our machine in Haskell
+
+
+~~~haskell
+data Op = Push Integer
+        | Add
+        | Sub
+        | Mul
+        | Div
+        deriving(Eq,Show)
+
+type Program = [Op]
+
+run :: Program -> Maybe Integer
+run p = go p [] where
+          go [] [] = Nothing
+          go [] (n:ns) = Just n
+          go (Push n : ops) s = go ops (n:s)
+          go (Add:ops) (x:y:s) = go ops (y + x : s)
+          go (Sub:ops) (x:y:s) = go ops (y - x : s)
+          go (Mul:ops) (x:y:s) = go ops (y * x : s)
+          go (Div:ops) (x:y:s) = go ops (y `div` x : s) 
+~~~
+
+## Abstract Syntax
+
+We will represent parsed arithmetic expressions in an Abstract Syntax Tree (AST)
+
+~~~haskell
+data ArithExpr = Val Integer
+		  | Binop Binop ArithExpr ArithExpr
+		  deriving(Eq,Show)
+
+data Binop = Plus
+		   | Minus
+		   | Times
+		   | Divide
+		   deriving(Eq,Show)
+~~~
+
+## Compiling Arithmetic Expressions
+
+### From trees to code
+
+~~~haskell
+compile :: ArithExpr -> Program
+compile e = go e [] where
+            go (Val n) p = Push n : p
+            go (Binop op l r) p = let p' = go r (binopToOp op : p)
+                                  in go l p'
+
+binopToOp :: Binop -> Op
+binopToOp Plus = Add
+binopToOp Minus = Sub
+binopToOp Times = Mul
+binopToOp Divide = Div
+~~~ 
+
+# Parsing
+
+## Where are we now?
+
+> - We can express arithmetic expressions as trees
+> - We can compile trees into machine code
+> - We can execute the machine code on an abstract machine
+> - Where do we go from here?
+> - We still need to parse arithmetic expressions to turn things like 3*(1+5) into an AST
+
+## Parser Combinators
+
+### What
+
+- Higher order functions operating on parsers
+
+### The good
+
+- Built into the language
+- Easy to get started
+- Highly modular
+
+### The Bad
+
+- Can be somewhat confusing
+- Backtracking
+- Left recursionb
+
+## The Type of a Parser
+
+![](http://www.willamette.edu/~fruehr/haskell/SeussFinal2.JPG "Parsing Poem")
+
+~~~haskell
+newtype Parser s t = P ([s] -> [(t,[s])])
+unP (P p) = p
+~~~
+
+## Some Basic Combinators
+
+### Recognizing a Symbol
+
+~~~haskell
+pSym :: Eq s => s -> Parser s s
+pSym a = P $ \inp -> case inp of 
+                     (s:ss) | s == a -> [(s,ss)]
+                     otherwise -> []
+~~~
+
+### A Successful Parser
+
+~~~haskell
+pReturn :: a -> Parser s a
+pReturn a = P $ \inp -> [(a,inp)]
+~~~
+
+### A Failing Parser
+~~~haskell
+pFail :: Parser s t
+pFail = P $ const []
+~~~
+
+> - My advice: Pay more attention to the types than anything else.
+
+# Combining Parsers
+
+## Sequencing Parsers
+
+### What type should a function that sequences parsers have?
+
+> - ~~~haskell
+Parser s a -> Parser s b -> Parser s (a,b)
+~~~ 
+
+> - ~~~haskell
+Parser s (b -> a) -> Parser s b -> Parser s a
+~~~ 
+
+> - Let's choose the second one
+
+> - ~~~haskell
+infixl 5 <*>
+(<*>) :: Parser s (b -> a) -> Parser s b -> Parser s a
+P p1 <*> P p2 = P $ \inp -> [(v1 v2, ss2)| (v1,ss1) <- p1 inp
+							             , (v2,ss2) <- p2 ss1
+							             ]
+~~~
+
+## Alternating Parsers
+
+~~~haskell
+infixr 3 <|>
+(<|>) :: Parser s a -> Parser s a -> Parser s a
+P p1 <|> P p2 = P $ \inp -> p1 inp ++ p2 inp
+~~~~
+
+### Choices
+
+~~~haskell
+pChoice :: [Parser s a] -> Parser s a
+pChoice ps = foldr (<|>) pFail ps
+~~~
+
+## Back to Sequencing
+
+### What good is our sequencing operator 
+
+> - ~~~haskell
+infixl 5 <*>
+(<*>) :: Parser s (b -> a) -> Parser s b -> Parser s a
+P p1 <*> P p2 = P $ \inp -> [(v1 v2, ss2)| (v1,ss1) <- p1 inp
+							             , (v2,ss2) <- p2 ss1
+							             ]
+~~~
+
+> - We can transform the result type
+> - But we need a parser that turns tokens into these "transformers"
+> - It would be nice if we could just apply a function to transform the results
+> - We want to lift functions to Parsers
+> - ~~~haskell
+infix 7 <$>
+(<$>) :: (b -> a) -> Parser s b -> Parser s a
+f <$> p = pReturn f <*> p
+~~~
+
+## Ignorant Parsers
+
+Sometimes we want to parse a token, but throw away the parse result
+
+~~~haskell
+infixl 3 `opt`
+infixl 5 <*, *>
+infixl 7 <$
+
+f <$ p = const <$> pReturn f <*> p
+p <* q = const <$> p         <*> q
+p *> q = id    <$  p         <*> q
+
+opt :: Parser s a -> a -> Parser s a
+p `opt` v = p <|> pReturn v
+~~~
+
+## Parsing Digits
+
+We're almost ready to write a parser for arithmetic expressions.
+
+How should we parse integers?
+
+> - We need to parse a single digit
+> - Then we need to parse a sequence of digits
+> - We could parse a single digit like "2" with something like:
+> -   ~~~haskell
+pTwo :: Parser Char Char
+pTwo = pSym '2'
+~~~
+
+> - ~~~haskell
+pDigit :: Parser Char Char
+pDigit  =  pSym '0'
+       <|> pSym '1'
+       <|> pSym '2'
+       <|> pSym '3'
+       <|> pSym '4'
+       <|> pSym '5'
+       <|> pSym '6'
+       <|> pSym '7'
+       <|> pSym '8'
+       <|> pSym '9'
+~~~
+
+## More Digits
+
+That last defintion is ugly we can clean it up a bit
+
+~~~haskell
+pDigit = pChoice $ map pSym ['0'..'9']
+~~~
+
+> - Can we do any better?
+
+## Satisfying Parsers
+
+It would be nice if we could parse tokens that satisfy a predicate
+
+~~~haskell
+pSatisfy :: (s -> Bool) -> Parser s s
+pSatisfy p = P $ \inp -> case inp of
+						(x:xs) | p x -> [(x,xs)]
+						otherwise    -> []
+~~~
+
+> - Then parsing a digit is easy
+> - ~~~haskell
+pDigit = pSatisfy isDigit
+~~~
+
+> - isDigit is a function defined in Data.Char
+
+## Many More Digits
+
+We can parse single digits easily now, but to parse integers we need to parse many of them
+
+> - ~~~haskell
+pMany :: Parser s a -> Parser s [a]
+pMany p = (:) <$> p <*> pMany p `opt` []
+~~~
+
+> - That takes care of sequences, but integers have at lease one digit
+> - ~~~haskell
+pMany1 :: Parser s a -> Parser s [a]
+pMany1 p = (:) <$> p <*> pMany p
+~~~
+
+## Parsing Arithmetic Expressions
+
+Recall our grammar for arithmetic expressions
+
+    <Expr>    ::= <Expr> + <Term>
+    		   |  <Expr> - <Term>
+    		   |  <Term>
+
+    <Term>    ::= <Term> * <Factor>
+    		   |  <Term> / <Factor>
+    		   |  <Factor>
+
+    <Factor>  ::= ( <Expr> )
+               | <Integer>
+
+    <Integer> ::= <Digit>+
+
+    <Digit>   ::= 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+
+## The Easy parts
+
+~~~haskell
+pDigit :: Parser Char Char
+pDigit = pSatisfy isDigit
+
+pInteger :: Parser Char ArithExpr
+pInteger = (Val . read) <$> pMany1 pDigit
+
+pFactor :: Parser Char ArithExpr
+pFactor  =  pSym '(' *> pExpr <* pSym ')'
+        <|> pInteger
+~~~
+
+## Some Helpful Combinators
+
+- ~~~haskell
+applyAll :: a -> [a -> a] -> a
+applyAll x [] = x
+applyAll x (f:fs) = applyAll (f x) fs
+~~~
+
+Now if we try parsing substraction
+
+
+
+    <Expr> ::= <Expr> - <Term>
+            | <Term>
+
+
+
+We need to get rid of the left recursion first
+
+    <Expr> ::= <Term> (- <Term>)*
+
+~~~haskell
+pSub :: Parser Char ArithExpr
+pSub = applyAll <$> pTerm <*> pMany ((Binop Minus) <$ pSym '-' <*> pTerm)
+~~~   
+
+- This builds trees with the arguments flipped, we can fix that
+- ~~~haskell
+pSub :: Parser Char ArithExpr
+pSub = applyAll <$> pTerm <*> pMany (flip (Binop Minus) <$ pSym '-' <*> pTerm)
+~~~  
+
+## Abstraction
+
+Let's define a combinator that handles this left recursion automatically
+
+~~~haskell
+pChainL :: Parser s (a -> a -> a) -> Parser s a -> Parser s a
+pChainL op p = applyAll <$> p <*> pMany (flip <$> op <*> p)
+~~~
+
+## Parsing Arithmetic Expressions
+
+Our grammar again
+
+    <Expr>    ::= <Expr> + <Term>
+    		   |  <Expr> - <Term>
+    		   |  <Term>
+
+    <Term>    ::= <Term> * <Factor>
+    		   |  <Term> / <Factor>
+    		   |  <Factor>
+
+    <Factor>  ::= ( <Expr> )
+               | <Integer>
+
+    <Integer> ::= <Digit>+
+
+    <Digit>   ::= 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9
+
+## Our Parser
+
+~~~haskell
+pExpr :: Parser Char ArithExpr
+pExpr = pChainL ((Binop Plus) <$ pSym '+'
+            <|>   (Binop Minus) <$ pSym '-') pTerm
+     <|> pTerm
+
+pTerm :: Parser Char ArithExpr
+pTerm = pChainL ((Binop Times) <$ pSym '*'
+            <|>  (Binop Divide) <$ pSym '/') pFactor
+     <|> pFactor
+
+pFactor :: Parser Char ArithExpr
+pFactor  =  pSym '(' *> pExpr <* pSym ')'
+        <|> pInteger
+
+pInteger :: Parser Char ArithExpr
+pInteger = (Val . read) <$> pMany1 pDigit
+
+pDigit :: Parser Char Char
+pDigit = pSatisfy isDigit
+~~~
+
+# Putting the Pieces Together
+
+## Parse -> Compile -> Run
+
+Parsing an expression
+
+~~~haskell
+parse :: String -> Maybe ArithExpr
+parse s = case (unP pExpr) . filter (not . isSpace) s of
+		[] -> Nothing
+		(x:xs) -> Just $ fst x
+~~~
+
+Generating Code
+
+~~~haskell
+codeGen :: Maybe ArithExpr -> Program
+codeGen mt = case mt of
+		Nothing -> []
+		Just t -> compile t
+~~~
+
+Evaluation
+
+~~~haskell
+eval :: String -> Maybe Integer
+eval = run . codeGen . parse
+~~~
+
+## Main
+
+A driver for our calculator program 
+
+~~~haskell
+main :: IO ()
+main = do
+	putStrLn "Enter an arithmetic expression to be evaluated: "
+	s <- getLine
+	case eval s of 
+		Nothing -> putStrLn "Something went wrong."
+		Just n -> putStrLn $ show n
+	main
+~~~
+
+# The End 
+
+## References
+
+S. Doaitse Swierstra. 2009. Combinator Parsing: A Short Tutorial.
+
+This is a great and readable paper on implementing parser combinators that doesn't require a very deep background in haskell.
+
+
+
+
+

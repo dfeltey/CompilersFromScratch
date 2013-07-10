@@ -233,9 +233,18 @@ match r (c<span class="fu">:</span>cs) <span class="fu">=</span> match (derivati
 <li>(C)ontrol (E)nvironment (K)ontinuation</li>
 </ul>
 </div>
+<div id="cek-explained" class="slide section level1">
+<h1>CEK explained</h1>
+<p>We will be writing byte code for a CEK machine</p>
+<ul>
+<li>The Control register holds a stack of bytecode to be executed</li>
+<li>The Environment register associates names with their values</li>
+<li>The Continuation register tells us what to do with a value</li>
+</ul>
+</div>
 <div id="our-language-again" class="slide section level1">
 <h1>Our Language again</h1>
-<p>Recall the desugared language:</p>
+<p>What are the core concepts in our language?</p>
 <pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">data</span> <span class="dt">Expr</span> <span class="fu">=</span> <span class="dt">App</span> <span class="dt">Expr</span> <span class="dt">Expr</span>
           <span class="fu">|</span> <span class="dt">Lambda</span> <span class="dt">Name</span> <span class="dt">Expr</span>
           <span class="fu">|</span> <span class="dt">Binop</span> <span class="dt">Op</span> <span class="dt">Expr</span> <span class="dt">Expr</span>
@@ -245,6 +254,72 @@ match r (c<span class="fu">:</span>cs) <span class="fu">=</span> match (derivati
           <span class="fu">|</span> <span class="dt">IF</span> <span class="dt">Expr</span> <span class="dt">Expr</span> <span class="dt">Expr</span>
           <span class="fu">|</span> <span class="dt">PrintE</span> <span class="dt">Expr</span> 
           <span class="kw">deriving</span>(<span class="kw">Show</span>)</code></pre>
+<ul class="incremental">
+<li>Function application</li>
+<li>Lambda abstraction</li>
+<li>Binary operators</li>
+<li>Variable access</li>
+<li>Constants</li>
+<li>If expressions</li>
+<li>Printing</li>
+</ul>
+</div>
+<div id="from-concepts-to-byte-code" class="slide section level1">
+<h1>From Concepts to (&quot;Byte&quot;) Code</h1>
+<p>Designing an instruction set for our core language</p>
+<ul>
+<li>The easy cases</li>
+</ul>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="dt">Val</span> <span class="dv">53</span> <span class="fu">---&gt;</span> <span class="dt">PushI</span> <span class="dv">53</span> </code></pre>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="dt">BoolE</span> <span class="kw">True</span> <span class="fu">---&gt;</span> <span class="dt">PushB</span> <span class="kw">True</span></code></pre>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="dt">Var</span> <span class="st">&quot;x&quot;</span> <span class="fu">---&gt;</span> <span class="dt">Access</span> <span class="st">&quot;x&quot;</span></code></pre>
+</div>
+<div id="from-concepts-to-byte-code-1" class="slide section level1">
+<h1>From Concepts to (&quot;Byte&quot;) Code</h1>
+<ul>
+<li>The middle cases</li>
+</ul>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="dt">Lambda</span> <span class="st">&quot;x&quot;</span> e <span class="fu">---&gt;</span> <span class="dt">Close</span> <span class="st">&quot;x&quot;</span> [compile e]</code></pre>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="dt">IF</span> e1 e2 e3 <span class="fu">---&gt;</span> <span class="dt">Branch</span> [compile e1] [compile e2] [compile e3]</code></pre>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="dt">PrintE</span> e <span class="fu">---&gt;</span> <span class="dt">Print</span> <span class="fu">:</span> compile e </code></pre>
+</div>
+<div id="from-concepts-to-byte-code-2" class="slide section level1">
+<h1>From Concepts to (&quot;Byte&quot;) Code</h1>
+<ul>
+<li>The hard cases</li>
+</ul>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="dt">App</span> e1 e2 <span class="fu">---&gt;</span> <span class="dt">Push</span> (compile e2) <span class="fu">:</span> compile e1</code></pre>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="dt">Binop</span> op e1 e2 <span class="fu">---&gt;</span> [<span class="dt">OpC</span> op, <span class="dt">Load</span> (compile e1), <span class="dt">Load</span> (compile e2)]</code></pre>
+</div>
+<div id="recap" class="slide section level1">
+<h1>Recap</h1>
+<p>Our &quot;Byte&quot; code as a Haskell data type</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">data</span> <span class="dt">Code</span> <span class="fu">=</span> <span class="dt">Push</span> [<span class="dt">Code</span>]
+          <span class="fu">|</span> <span class="dt">PushI</span> <span class="dt">Integer</span>
+          <span class="fu">|</span> <span class="dt">PushB</span> <span class="dt">Bool</span>
+          <span class="fu">|</span> <span class="dt">Access</span> <span class="dt">Name</span>
+          <span class="fu">|</span> <span class="dt">Close</span> <span class="dt">Name</span> [<span class="dt">Code</span>]
+          <span class="fu">|</span> <span class="dt">OpC</span> <span class="dt">Op</span>
+          <span class="fu">|</span> <span class="dt">Load</span> [<span class="dt">Code</span>]
+          <span class="fu">|</span> <span class="dt">Branch</span> [<span class="dt">Code</span>] [<span class="dt">Code</span>] [<span class="dt">Code</span>]
+          <span class="fu">|</span> <span class="dt">Print</span> </code></pre>
+</div>
+<div id="continuations" class="slide section level1">
+<h1>Continuations</h1>
+<p>Our CEK machine will build continuations for all &quot;complex&quot; expressions</p>
+<ul>
+<li>The (K)ontinuation register is a stack of continuations</li>
+<li>It keeps track of the next step of evaluation</li>
+</ul>
+<ul class="incremental">
+<li><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">data</span> <span class="dt">Cont</span> <span class="fu">=</span> <span class="dt">MT</span>
+          <span class="fu">|</span> <span class="dt">FN</span> <span class="dt">Clos</span> <span class="dt">Cont</span>
+          <span class="fu">|</span> <span class="dt">AR</span> [<span class="dt">Code</span>] <span class="dt">Env</span> <span class="dt">Cont</span>
+          <span class="fu">|</span> <span class="dt">OP</span> <span class="dt">Op</span> [<span class="dt">Clos</span>] [<span class="dt">Code</span>] <span class="dt">Env</span> <span class="dt">Cont</span>
+          <span class="fu">|</span> <span class="dt">IFC</span> [<span class="dt">Code</span>] [<span class="dt">Code</span>] <span class="dt">Env</span> <span class="dt">Cont</span>
+          <span class="fu">|</span> <span class="dt">PrintC</span>  <span class="dt">Cont</span>
+          <span class="kw">deriving</span>(<span class="kw">Show</span>)</code></pre></li>
+</ul>
 </div>
 </body>
 </html>

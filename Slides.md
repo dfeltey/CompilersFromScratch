@@ -220,7 +220,7 @@ We will be writing byte code for a CEK machine
 
 # Our Language again
 
-Recall the desugared language:
+What are the core concepts in our language?
 
 ~~~haskell
 data Expr = App Expr Expr
@@ -233,6 +233,96 @@ data Expr = App Expr Expr
           | PrintE Expr 
           deriving(Show)
 ~~~
+
+> - Function application
+> - Lambda abstraction
+> - Binary operators
+> - Variable access
+> - Constants
+> - If expressions
+> - Printing 
+
+# From Concepts to ("Byte") Code
+
+Designing an instruction set for our core language
+
+- The easy cases
+
+~~~haskell
+Val 53 ---> PushI 53 
+~~~
+
+~~~haskell
+BoolE True ---> PushB True
+~~~
+
+~~~haskell
+Var "x" ---> Access "x"
+~~~
+
+# From Concepts to ("Byte") Code
+
+- The middle cases
+
+~~~haskell
+Lambda "x" e ---> Close "x" [compile e]
+~~~
+
+~~~haskell
+IF e1 e2 e3 ---> Branch [compile e1] [compile e2] [compile e3]
+~~~
+
+~~~haskell
+PrintE e ---> Print : compile e 
+~~~
+
+# From Concepts to ("Byte") Code
+
+- The hard cases
+
+~~~haskell
+App e1 e2 ---> Push (compile e2) : compile e1
+~~~
+
+~~~haskell
+Binop op e1 e2 ---> [OpC op, Load (compile e1), Load (compile e2)]
+~~~
+
+# Recap
+
+Our "Byte" code as a Haskell data type
+
+~~~haskell
+data Code = Push [Code]
+          | PushI Integer
+          | PushB Bool
+          | Access Name
+          | Close Name [Code]
+          | OpC Op
+          | Load [Code]
+          | Branch [Code] [Code] [Code]
+          | Print 
+~~~
+
+
+# Continuations
+
+Our CEK machine will build continuations for all "complex" expressions
+
+- The (K)ontinuation register is a stack of continuations
+- It keeps track of the next step of evaluation
+
+> - ~~~haskell
+data Cont = MT
+          | FN Clos Cont
+          | AR [Code] Env Cont
+          | OP Op [Clos] [Code] Env Cont
+          | IFC [Code] [Code] Env Cont
+          | PrintC  Cont
+          deriving(Show)
+~~~
+
+
 
 
 

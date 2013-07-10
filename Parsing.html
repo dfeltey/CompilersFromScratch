@@ -1,0 +1,498 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <meta name="author" content="Dan Feltey" />
+  <meta name="date" content="2013-05-29" />
+  <title>Parser Combinators and Compilers From The Ground Up</title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <style type="text/css">
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; }
+code > span.dt { color: #902000; }
+code > span.dv { color: #40a070; }
+code > span.bn { color: #40a070; }
+code > span.fl { color: #40a070; }
+code > span.ch { color: #4070a0; }
+code > span.st { color: #4070a0; }
+code > span.co { color: #60a0b0; font-style: italic; }
+code > span.ot { color: #007020; }
+code > span.al { color: #ff0000; font-weight: bold; }
+code > span.fu { color: #06287e; }
+code > span.er { color: #ff0000; font-weight: bold; }
+  </style>
+  <link rel="stylesheet" type="text/css" media="screen, projection, print"
+    href="http://www.w3.org/Talks/Tools/Slidy2/styles/slidy.css" />
+  <script src="http://www.w3.org/Talks/Tools/Slidy2/scripts/slidy.js.gz"
+    charset="utf-8" type="text/javascript"></script>
+</head>
+<body>
+<div class="slide titlepage">
+  <h1 class="title">Parser Combinators and Compilers From The Ground Up</h1>
+  <p class="author">
+Dan Feltey
+  </p>
+  <p class="date">May 29, 2013</p>
+</div>
+<div id="in-this-talk" class="titleslide slide section level1"><h1>In This Talk</h1></div><div id="some-big-ideas" class="slide section level2">
+<h1>Some Big Ideas</h1>
+<ul>
+<li>An overview of compilation</li>
+<li>Parser Combinators</li>
+<li>Abstract Syntax Trees</li>
+<li>Abstract Machines</li>
+</ul>
+</div><div id="some-applications" class="slide section level2">
+<h1>Some Applications</h1>
+<ul>
+<li>Parsing arithmetic expressions</li>
+<li>An abstract machine for arithmetic</li>
+<li>Compiling arithmetic expressions</li>
+</ul>
+</div>
+<div id="compilation" class="titleslide slide section level1"><h1>Compilation</h1></div><div id="the-compilation-process" class="slide section level2">
+<h1>The Compilation Process</h1>
+<h3 id="a-typical-flow">A typical flow</h3>
+<p>Source Code -&gt; Lexer -&gt; Parser -&gt; Code Generator -&gt; Machine Code</p>
+<ul class="incremental">
+<li>Lexers usually consume source code and produce a list of tokens</li>
+<li>Parsers often consume tokens and produce parse trees</li>
+<li>There can be many intermediate operations on an abstract syntax tree</li>
+<li>Code Generators traverse the AST and produce lists of machine instructions</li>
+</ul>
+</div><div id="our-goal-today" class="slide section level2">
+<h1>Our Goal Today</h1>
+<p>We want to parse and compile expressions such as:</p>
+<ul>
+<li>1 + 2</li>
+<li>5 - 3</li>
+<li>7 * 7</li>
+<li>9 / 3</li>
+<li>3 * (4+3) + 6/2*(8 - 1)</li>
+</ul>
+</div><div id="a-grammer-for-arithmetic-expressions" class="slide section level2">
+<h1>A Grammer For Arithmetic Expressions</h1>
+<pre><code>&lt;Expr&gt; ::= &lt;Expr&gt; + &lt;Expr&gt;
+        |  &lt;Expr&gt; - &lt;Expr&gt;
+        |  &lt;Expr&gt; * &lt;Expr&gt;
+        |  &lt;Expr&gt; / &lt;Expr&gt;
+        |  ( &lt;Expr&gt; )
+        |  &lt;Integer&gt;</code></pre>
+<ul class="incremental">
+<li>Why won't this work very well?</li>
+<li>Precedence</li>
+<li>Ambiguity</li>
+</ul>
+</div><div id="a-better-grammar-for-arithmetic-expressions" class="slide section level2">
+<h1>A Better Grammar For Arithmetic Expressions</h1>
+<pre><code>&lt;Expr&gt;   ::= &lt;Expr&gt; + &lt;Term&gt;
+          |  &lt;Expr&gt; - &lt;Term&gt;
+          |  &lt;Term&gt;
+
+&lt;Term&gt;   ::= &lt;Term&gt; * &lt;Factor&gt;
+          |  &lt;Term&gt; / &lt;Factor&gt;
+          |  &lt;Factor&gt;
+
+&lt;Factor&gt; ::= ( &lt;Expr&gt; )
+          | &lt;Integer&gt;   </code></pre>
+</div>
+<div id="from-the-ground-up" class="titleslide slide section level1"><h1>From the ground up</h1></div><div id="abstract-machines" class="slide section level2">
+<h1>Abstract Machines</h1>
+<ul>
+<li>Models of computation or computers</li>
+<li>Abstractions of real machines</li>
+<li>Rules for evaluation</li>
+</ul>
+</div><div id="an-abstract-machine-for-arithmetic" class="slide section level2">
+<h1>An Abstract Machine For Arithmetic</h1>
+<h3 id="reverse-polish-notation">Reverse Polish Notation</h3>
+<ul>
+<li>Alternative notation for arithmetic expressions</li>
+<li>1 4 + 7 *   ==&gt;  35</li>
+</ul>
+<h3 id="evaluating-rpn">Evaluating RPN</h3>
+<ul>
+<li>Use a stack s (represented by a list in Haskell)</li>
+<li>If we encounter an Integer push it on the stack</li>
+<li>If we encounter an operation pop the top two elements of the stack and apply the operation</li>
+</ul>
+</div><div id="an-example" class="slide section level2">
+<h1>An Example</h1>
+<p>Represent the current expression (e) and stack (s) as (e,s)</p>
+<h3 id="evaluating-5-1-2-4-3--">Evaluating  (5 1 2 + 4 * + 3 -)</h3>
+<ul class="incremental">
+<li>Initial state: (5 1 2 + 4 * + 3 -, [])</li>
+<li>Pushing 5 onto the stack: (1 2 + 4 * + 3 -, [5])</li>
+<li>Push 1 on the stack: (2 + 4 * + 3 -, [1, 5])</li>
+<li>Push 2: (+ 4 * 3 -, [2, 1, 5])</li>
+<li>Pop and add top two elements: (4 * + 3 -, [3, 5])</li>
+<li>Push 4: (* + 3 -, [4, 3, 5])</li>
+<li>Pop and multiply top two elements: (+ 3 -, [12, 5])</li>
+<li>Pop and add top two elements: (3 -, [17])</li>
+<li>Push 3: (-, [3, 17])</li>
+<li>Pop and subtract top two elements (,[14])</li>
+<li>Result: 14</li>
+</ul>
+</div><div id="a-machine-for-arithmetic" class="slide section level2">
+<h1>A Machine For Arithmetic</h1>
+<p>RPN has two basic operations:</p>
+<ul>
+<li>Push</li>
+<li>Apply binary operations</li>
+</ul>
+<p>Let's turn this into an &quot;assembly language&quot; with the operations</p>
+<ul>
+<li>Push</li>
+<li>Add</li>
+<li>Sub</li>
+<li>Mult</li>
+<li>Div</li>
+</ul>
+</div><div id="an-executable-machine" class="slide section level2">
+<h1>An Executable Machine</h1>
+<h3 id="implementing-our-machine-in-haskell">Implementing our machine in Haskell</h3>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">data</span> <span class="dt">Op</span> <span class="fu">=</span> <span class="dt">Push</span> <span class="dt">Integer</span>
+        <span class="fu">|</span> <span class="dt">Add</span>
+        <span class="fu">|</span> <span class="dt">Sub</span>
+        <span class="fu">|</span> <span class="dt">Mul</span>
+        <span class="fu">|</span> <span class="dt">Div</span>
+        <span class="kw">deriving</span>(<span class="kw">Eq</span>,<span class="kw">Show</span>)
+
+<span class="kw">type</span> <span class="dt">Program</span> <span class="fu">=</span> [<span class="dt">Op</span>]
+
+<span class="ot">run ::</span> <span class="dt">Program</span> <span class="ot">-&gt;</span> <span class="dt">Maybe</span> <span class="dt">Integer</span>
+run p <span class="fu">=</span> go p [] <span class="kw">where</span>
+          go [] [] <span class="fu">=</span> <span class="kw">Nothing</span>
+          go [] (n<span class="fu">:</span>ns) <span class="fu">=</span> <span class="kw">Just</span> n
+          go (<span class="dt">Push</span> n <span class="fu">:</span> ops) s <span class="fu">=</span> go ops (n<span class="fu">:</span>s)
+          go (<span class="dt">Add</span><span class="fu">:</span>ops) (x<span class="fu">:</span>y<span class="fu">:</span>s) <span class="fu">=</span> go ops (y <span class="fu">+</span> x <span class="fu">:</span> s)
+          go (<span class="dt">Sub</span><span class="fu">:</span>ops) (x<span class="fu">:</span>y<span class="fu">:</span>s) <span class="fu">=</span> go ops (y <span class="fu">-</span> x <span class="fu">:</span> s)
+          go (<span class="dt">Mul</span><span class="fu">:</span>ops) (x<span class="fu">:</span>y<span class="fu">:</span>s) <span class="fu">=</span> go ops (y <span class="fu">*</span> x <span class="fu">:</span> s)
+          go (<span class="dt">Div</span><span class="fu">:</span>ops) (x<span class="fu">:</span>y<span class="fu">:</span>s) <span class="fu">=</span> go ops (y <span class="ot">`div`</span> x <span class="fu">:</span> s) </code></pre>
+</div><div id="abstract-syntax" class="slide section level2">
+<h1>Abstract Syntax</h1>
+<p>We will represent parsed arithmetic expressions in an Abstract Syntax Tree (AST)</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">data</span> <span class="dt">ArithExpr</span> <span class="fu">=</span> <span class="dt">Val</span> <span class="dt">Integer</span>
+          <span class="fu">|</span> <span class="dt">Binop</span> <span class="dt">Binop</span> <span class="dt">ArithExpr</span> <span class="dt">ArithExpr</span>
+          <span class="kw">deriving</span>(<span class="kw">Eq</span>,<span class="kw">Show</span>)
+
+<span class="kw">data</span> <span class="dt">Binop</span> <span class="fu">=</span> <span class="dt">Plus</span>
+           <span class="fu">|</span> <span class="dt">Minus</span>
+           <span class="fu">|</span> <span class="dt">Times</span>
+           <span class="fu">|</span> <span class="dt">Divide</span>
+           <span class="kw">deriving</span>(<span class="kw">Eq</span>,<span class="kw">Show</span>)</code></pre>
+</div><div id="compiling-arithmetic-expressions" class="slide section level2">
+<h1>Compiling Arithmetic Expressions</h1>
+<h3 id="from-trees-to-code">From trees to code</h3>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">compile ::</span> <span class="dt">ArithExpr</span> <span class="ot">-&gt;</span> <span class="dt">Program</span>
+compile e <span class="fu">=</span> go e [] <span class="kw">where</span>
+            go (<span class="dt">Val</span> n) p <span class="fu">=</span> <span class="dt">Push</span> n <span class="fu">:</span> p
+            go (<span class="dt">Binop</span> op l r) p <span class="fu">=</span> <span class="kw">let</span> p&#39; <span class="fu">=</span> go r (binopToOp op <span class="fu">:</span> p)
+                                  <span class="kw">in</span> go l p&#39;
+
+<span class="ot">binopToOp ::</span> <span class="dt">Binop</span> <span class="ot">-&gt;</span> <span class="dt">Op</span>
+binopToOp <span class="dt">Plus</span> <span class="fu">=</span> <span class="dt">Add</span>
+binopToOp <span class="dt">Minus</span> <span class="fu">=</span> <span class="dt">Sub</span>
+binopToOp <span class="dt">Times</span> <span class="fu">=</span> <span class="dt">Mul</span>
+binopToOp <span class="dt">Divide</span> <span class="fu">=</span> <span class="dt">Div</span></code></pre>
+</div>
+<div id="parsing" class="titleslide slide section level1"><h1>Parsing</h1></div><div id="where-are-we-now" class="slide section level2">
+<h1>Where are we now?</h1>
+<ul class="incremental">
+<li>We can express arithmetic expressions as trees</li>
+<li>We can compile trees into machine code</li>
+<li>We can execute the machine code on an abstract machine</li>
+<li>Where do we go from here?</li>
+<li>We still need to parse arithmetic expressions to turn things like 3*(1+5) into an AST</li>
+</ul>
+</div><div id="parser-combinators" class="slide section level2">
+<h1>Parser Combinators</h1>
+<h3 id="what">What</h3>
+<ul>
+<li>Higher order functions operating on parsers</li>
+</ul>
+<h3 id="the-good">The good</h3>
+<ul>
+<li>Built into the language</li>
+<li>Easy to get started</li>
+<li>Highly modular</li>
+</ul>
+<h3 id="the-bad">The Bad</h3>
+<ul>
+<li>Can be somewhat confusing</li>
+<li>Backtracking</li>
+<li>Left recursionb</li>
+</ul>
+</div><div id="the-type-of-a-parser" class="slide section level2">
+<h1>The Type of a Parser</h1>
+<div class="figure">
+<img src="http://www.willamette.edu/~fruehr/haskell/SeussFinal2.JPG" title="Parsing Poem" />
+</div>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">newtype</span> <span class="dt">Parser</span> s t <span class="fu">=</span> <span class="dt">P</span> ([s] <span class="ot">-&gt;</span> [(t,[s])])
+unP (<span class="dt">P</span> p) <span class="fu">=</span> p</code></pre>
+</div><div id="some-basic-combinators" class="slide section level2">
+<h1>Some Basic Combinators</h1>
+<h3 id="recognizing-a-symbol">Recognizing a Symbol</h3>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">pSym ::</span> <span class="kw">Eq</span> s <span class="ot">=&gt;</span> s <span class="ot">-&gt;</span> <span class="dt">Parser</span> s s
+pSym a <span class="fu">=</span> <span class="dt">P</span> <span class="fu">$</span> \inp <span class="ot">-&gt;</span> <span class="kw">case</span> inp <span class="kw">of</span> 
+                     (s<span class="fu">:</span>ss) <span class="fu">|</span> s <span class="fu">==</span> a <span class="ot">-&gt;</span> [(s,ss)]
+                     <span class="fu">otherwise</span> <span class="ot">-&gt;</span> []</code></pre>
+<h3 id="a-successful-parser">A Successful Parser</h3>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">pReturn ::</span> a <span class="ot">-&gt;</span> <span class="dt">Parser</span> s a
+pReturn a <span class="fu">=</span> <span class="dt">P</span> <span class="fu">$</span> \inp <span class="ot">-&gt;</span> [(a,inp)]</code></pre>
+<h3 id="a-failing-parser">A Failing Parser</h3>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">pFail ::</span> <span class="dt">Parser</span> s t
+pFail <span class="fu">=</span> <span class="dt">P</span> <span class="fu">$</span> <span class="fu">const</span> []</code></pre>
+<ul class="incremental">
+<li>My advice: Pay more attention to the types than anything else.</li>
+</ul>
+</div>
+<div id="combining-parsers" class="titleslide slide section level1"><h1>Combining Parsers</h1></div><div id="sequencing-parsers" class="slide section level2">
+<h1>Sequencing Parsers</h1>
+<h3 id="what-type-should-a-function-that-sequences-parsers-have">What type should a function that sequences parsers have?</h3>
+<ul class="incremental">
+<li><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="dt">Parser</span> s a <span class="ot">-&gt;</span> <span class="dt">Parser</span> s b <span class="ot">-&gt;</span> <span class="dt">Parser</span> s (a,b)</code></pre></li>
+</ul>
+<ul class="incremental">
+<li><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="dt">Parser</span> s (b <span class="ot">-&gt;</span> a) <span class="ot">-&gt;</span> <span class="dt">Parser</span> s b <span class="ot">-&gt;</span> <span class="dt">Parser</span> s a</code></pre></li>
+</ul>
+<ul class="incremental">
+<li>Let's choose the second one</li>
+</ul>
+<ul class="incremental">
+<li><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">infixl</span> <span class="dv">5</span> <span class="fu">&lt;*&gt;</span>
+<span class="ot">(&lt;*&gt;) ::</span> <span class="dt">Parser</span> s (b <span class="ot">-&gt;</span> a) <span class="ot">-&gt;</span> <span class="dt">Parser</span> s b <span class="ot">-&gt;</span> <span class="dt">Parser</span> s a
+<span class="dt">P</span> p1 <span class="fu">&lt;*&gt;</span> <span class="dt">P</span> p2 <span class="fu">=</span> <span class="dt">P</span> <span class="fu">$</span> \inp <span class="ot">-&gt;</span> [(v1 v2, ss2)<span class="fu">|</span> (v1,ss1) <span class="ot">&lt;-</span> p1 inp
+                                         , (v2,ss2) <span class="ot">&lt;-</span> p2 ss1
+                                         ]</code></pre></li>
+</ul>
+</div><div id="alternating-parsers" class="slide section level2">
+<h1>Alternating Parsers</h1>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">infixr</span> <span class="dv">3</span> <span class="fu">&lt;|&gt;</span>
+<span class="ot">(&lt;|&gt;) ::</span> <span class="dt">Parser</span> s a <span class="ot">-&gt;</span> <span class="dt">Parser</span> s a <span class="ot">-&gt;</span> <span class="dt">Parser</span> s a
+<span class="dt">P</span> p1 <span class="fu">&lt;|&gt;</span> <span class="dt">P</span> p2 <span class="fu">=</span> <span class="dt">P</span> <span class="fu">$</span> \inp <span class="ot">-&gt;</span> p1 inp <span class="fu">++</span> p2 inp</code></pre>
+<h3 id="choices">Choices</h3>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">pChoice ::</span> [<span class="dt">Parser</span> s a] <span class="ot">-&gt;</span> <span class="dt">Parser</span> s a
+pChoice ps <span class="fu">=</span> <span class="fu">foldr</span> (<span class="fu">&lt;|&gt;</span>) pFail ps</code></pre>
+</div><div id="back-to-sequencing" class="slide section level2">
+<h1>Back to Sequencing</h1>
+<h3 id="what-good-is-our-sequencing-operator">What good is our sequencing operator</h3>
+<ul class="incremental">
+<li><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">infixl</span> <span class="dv">5</span> <span class="fu">&lt;*&gt;</span>
+<span class="ot">(&lt;*&gt;) ::</span> <span class="dt">Parser</span> s (b <span class="ot">-&gt;</span> a) <span class="ot">-&gt;</span> <span class="dt">Parser</span> s b <span class="ot">-&gt;</span> <span class="dt">Parser</span> s a
+<span class="dt">P</span> p1 <span class="fu">&lt;*&gt;</span> <span class="dt">P</span> p2 <span class="fu">=</span> <span class="dt">P</span> <span class="fu">$</span> \inp <span class="ot">-&gt;</span> [(v1 v2, ss2)<span class="fu">|</span> (v1,ss1) <span class="ot">&lt;-</span> p1 inp
+                                         , (v2,ss2) <span class="ot">&lt;-</span> p2 ss1
+                                         ]</code></pre></li>
+</ul>
+<ul class="incremental">
+<li>We can transform the result type</li>
+<li>But we need a parser that turns tokens into these &quot;transformers&quot;</li>
+<li>It would be nice if we could just apply a function to transform the results</li>
+<li>We want to lift functions to Parsers</li>
+<li><pre class="sourceCode haskell"><code class="sourceCode haskell">infix <span class="dv">7</span> <span class="fu">&lt;$&gt;</span>
+<span class="ot">(&lt;$&gt;) ::</span> (b <span class="ot">-&gt;</span> a) <span class="ot">-&gt;</span> <span class="dt">Parser</span> s b <span class="ot">-&gt;</span> <span class="dt">Parser</span> s a
+f <span class="fu">&lt;$&gt;</span> p <span class="fu">=</span> pReturn f <span class="fu">&lt;*&gt;</span> p</code></pre></li>
+</ul>
+</div><div id="ignorant-parsers" class="slide section level2">
+<h1>Ignorant Parsers</h1>
+<p>Sometimes we want to parse a token, but throw away the parse result</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">infixl</span> <span class="dv">3</span> <span class="ot">`opt`</span>
+<span class="kw">infixl</span> <span class="dv">5</span> <span class="fu">&lt;*</span>, <span class="fu">*&gt;</span>
+<span class="kw">infixl</span> <span class="dv">7</span> <span class="fu">&lt;$</span>
+
+f <span class="fu">&lt;$</span> p <span class="fu">=</span> <span class="fu">const</span> <span class="fu">&lt;$&gt;</span> pReturn f <span class="fu">&lt;*&gt;</span> p
+p <span class="fu">&lt;*</span> q <span class="fu">=</span> <span class="fu">const</span> <span class="fu">&lt;$&gt;</span> p         <span class="fu">&lt;*&gt;</span> q
+p <span class="fu">*&gt;</span> q <span class="fu">=</span> <span class="fu">id</span>    <span class="fu">&lt;$</span>  p         <span class="fu">&lt;*&gt;</span> q
+
+<span class="ot">opt ::</span> <span class="dt">Parser</span> s a <span class="ot">-&gt;</span> a <span class="ot">-&gt;</span> <span class="dt">Parser</span> s a
+p <span class="ot">`opt`</span> v <span class="fu">=</span> p <span class="fu">&lt;|&gt;</span> pReturn v</code></pre>
+</div><div id="parsing-digits" class="slide section level2">
+<h1>Parsing Digits</h1>
+<p>We're almost ready to write a parser for arithmetic expressions.</p>
+<p>How should we parse integers?</p>
+<ul class="incremental">
+<li>We need to parse a single digit</li>
+<li>Then we need to parse a sequence of digits</li>
+<li>We could parse a single digit like &quot;2&quot; with something like:</li>
+<li><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">pTwo ::</span> <span class="dt">Parser</span> <span class="dt">Char</span> <span class="dt">Char</span>
+pTwo <span class="fu">=</span> pSym <span class="ch">&#39;2&#39;</span></code></pre></li>
+</ul>
+<ul class="incremental">
+<li><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">pDigit ::</span> <span class="dt">Parser</span> <span class="dt">Char</span> <span class="dt">Char</span>
+pDigit  <span class="fu">=</span>  pSym <span class="ch">&#39;0&#39;</span>
+       <span class="fu">&lt;|&gt;</span> pSym <span class="ch">&#39;1&#39;</span>
+       <span class="fu">&lt;|&gt;</span> pSym <span class="ch">&#39;2&#39;</span>
+       <span class="fu">&lt;|&gt;</span> pSym <span class="ch">&#39;3&#39;</span>
+       <span class="fu">&lt;|&gt;</span> pSym <span class="ch">&#39;4&#39;</span>
+       <span class="fu">&lt;|&gt;</span> pSym <span class="ch">&#39;5&#39;</span>
+       <span class="fu">&lt;|&gt;</span> pSym <span class="ch">&#39;6&#39;</span>
+       <span class="fu">&lt;|&gt;</span> pSym <span class="ch">&#39;7&#39;</span>
+       <span class="fu">&lt;|&gt;</span> pSym <span class="ch">&#39;8&#39;</span>
+       <span class="fu">&lt;|&gt;</span> pSym <span class="ch">&#39;9&#39;</span></code></pre></li>
+</ul>
+</div><div id="more-digits" class="slide section level2">
+<h1>More Digits</h1>
+<p>That last defintion is ugly we can clean it up a bit</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell">pDigit <span class="fu">=</span> pChoice <span class="fu">$</span> <span class="fu">map</span> pSym [<span class="ch">&#39;0&#39;</span><span class="fu">..</span><span class="ch">&#39;9&#39;</span>]</code></pre>
+<ul class="incremental">
+<li>Can we do any better?</li>
+</ul>
+</div><div id="satisfying-parsers" class="slide section level2">
+<h1>Satisfying Parsers</h1>
+<p>It would be nice if we could parse tokens that satisfy a predicate</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">pSatisfy ::</span> (s <span class="ot">-&gt;</span> <span class="dt">Bool</span>) <span class="ot">-&gt;</span> <span class="dt">Parser</span> s s
+pSatisfy p <span class="fu">=</span> <span class="dt">P</span> <span class="fu">$</span> \inp <span class="ot">-&gt;</span> <span class="kw">case</span> inp <span class="kw">of</span>
+                        (x<span class="fu">:</span>xs) <span class="fu">|</span> p x <span class="ot">-&gt;</span> [(x,xs)]
+                        <span class="fu">otherwise</span>    <span class="ot">-&gt;</span> []</code></pre>
+<ul class="incremental">
+<li>Then parsing a digit is easy</li>
+<li><pre class="sourceCode haskell"><code class="sourceCode haskell">pDigit <span class="fu">=</span> pSatisfy <span class="fu">isDigit</span></code></pre></li>
+</ul>
+<ul class="incremental">
+<li>isDigit is a function defined in Data.Char</li>
+</ul>
+</div><div id="many-more-digits" class="slide section level2">
+<h1>Many More Digits</h1>
+<p>We can parse single digits easily now, but to parse integers we need to parse many of them</p>
+<ul class="incremental">
+<li><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">pMany ::</span> <span class="dt">Parser</span> s a <span class="ot">-&gt;</span> <span class="dt">Parser</span> s [a]
+pMany p <span class="fu">=</span> (<span class="fu">:</span>) <span class="fu">&lt;$&gt;</span> p <span class="fu">&lt;*&gt;</span> pMany p <span class="ot">`opt`</span> []</code></pre></li>
+</ul>
+<ul class="incremental">
+<li>That takes care of sequences, but integers have at lease one digit</li>
+<li><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">pMany1 ::</span> <span class="dt">Parser</span> s a <span class="ot">-&gt;</span> <span class="dt">Parser</span> s [a]
+pMany1 p <span class="fu">=</span> (<span class="fu">:</span>) <span class="fu">&lt;$&gt;</span> p <span class="fu">&lt;*&gt;</span> pMany p</code></pre></li>
+</ul>
+</div><div id="parsing-arithmetic-expressions" class="slide section level2">
+<h1>Parsing Arithmetic Expressions</h1>
+<p>Recall our grammar for arithmetic expressions</p>
+<pre><code>&lt;Expr&gt;    ::= &lt;Expr&gt; + &lt;Term&gt;
+           |  &lt;Expr&gt; - &lt;Term&gt;
+           |  &lt;Term&gt;
+
+&lt;Term&gt;    ::= &lt;Term&gt; * &lt;Factor&gt;
+           |  &lt;Term&gt; / &lt;Factor&gt;
+           |  &lt;Factor&gt;
+
+&lt;Factor&gt;  ::= ( &lt;Expr&gt; )
+           | &lt;Integer&gt;
+
+&lt;Integer&gt; ::= &lt;Digit&gt;+
+
+&lt;Digit&gt;   ::= 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9</code></pre>
+</div><div id="the-easy-parts" class="slide section level2">
+<h1>The Easy parts</h1>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">pDigit ::</span> <span class="dt">Parser</span> <span class="dt">Char</span> <span class="dt">Char</span>
+pDigit <span class="fu">=</span> pSatisfy <span class="fu">isDigit</span>
+
+<span class="ot">pInteger ::</span> <span class="dt">Parser</span> <span class="dt">Char</span> <span class="dt">ArithExpr</span>
+pInteger <span class="fu">=</span> (<span class="dt">Val</span> <span class="fu">.</span> <span class="fu">read</span>) <span class="fu">&lt;$&gt;</span> pMany1 pDigit
+
+<span class="ot">pFactor ::</span> <span class="dt">Parser</span> <span class="dt">Char</span> <span class="dt">ArithExpr</span>
+pFactor  <span class="fu">=</span>  pSym <span class="ch">&#39;(&#39;</span> <span class="fu">*&gt;</span> pExpr <span class="fu">&lt;*</span> pSym <span class="ch">&#39;)&#39;</span>
+        <span class="fu">&lt;|&gt;</span> pInteger</code></pre>
+</div><div id="some-helpful-combinators" class="slide section level2">
+<h1>Some Helpful Combinators</h1>
+<ul>
+<li><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">applyAll ::</span> a <span class="ot">-&gt;</span> [a <span class="ot">-&gt;</span> a] <span class="ot">-&gt;</span> a
+applyAll x [] <span class="fu">=</span> x
+applyAll x (f<span class="fu">:</span>fs) <span class="fu">=</span> applyAll (f x) fs</code></pre></li>
+</ul>
+<p>Now if we try parsing substraction</p>
+<pre><code>&lt;Expr&gt; ::= &lt;Expr&gt; - &lt;Term&gt;
+        | &lt;Term&gt;</code></pre>
+<p>We need to get rid of the left recursion first</p>
+<pre><code>&lt;Expr&gt; ::= &lt;Term&gt; (- &lt;Term&gt;)*</code></pre>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">pSub ::</span> <span class="dt">Parser</span> <span class="dt">Char</span> <span class="dt">ArithExpr</span>
+pSub <span class="fu">=</span> applyAll <span class="fu">&lt;$&gt;</span> pTerm <span class="fu">&lt;*&gt;</span> pMany ((<span class="dt">Binop</span> <span class="dt">Minus</span>) <span class="fu">&lt;$</span> pSym <span class="ch">&#39;-&#39;</span> <span class="fu">&lt;*&gt;</span> pTerm)</code></pre>
+<ul>
+<li>This builds trees with the arguments flipped, we can fix that</li>
+<li><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">pSub ::</span> <span class="dt">Parser</span> <span class="dt">Char</span> <span class="dt">ArithExpr</span>
+pSub <span class="fu">=</span> applyAll <span class="fu">&lt;$&gt;</span> pTerm <span class="fu">&lt;*&gt;</span> pMany (<span class="fu">flip</span> (<span class="dt">Binop</span> <span class="dt">Minus</span>) <span class="fu">&lt;$</span> pSym <span class="ch">&#39;-&#39;</span> <span class="fu">&lt;*&gt;</span> pTerm)</code></pre></li>
+</ul>
+</div><div id="abstraction" class="slide section level2">
+<h1>Abstraction</h1>
+<p>Let's define a combinator that handles this left recursion automatically</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">pChainL ::</span> <span class="dt">Parser</span> s (a <span class="ot">-&gt;</span> a <span class="ot">-&gt;</span> a) <span class="ot">-&gt;</span> <span class="dt">Parser</span> s a <span class="ot">-&gt;</span> <span class="dt">Parser</span> s a
+pChainL op p <span class="fu">=</span> applyAll <span class="fu">&lt;$&gt;</span> p <span class="fu">&lt;*&gt;</span> pMany (<span class="fu">flip</span> <span class="fu">&lt;$&gt;</span> op <span class="fu">&lt;*&gt;</span> p)</code></pre>
+</div><div id="parsing-arithmetic-expressions-1" class="slide section level2">
+<h1>Parsing Arithmetic Expressions</h1>
+<p>Our grammar again</p>
+<pre><code>&lt;Expr&gt;    ::= &lt;Expr&gt; + &lt;Term&gt;
+           |  &lt;Expr&gt; - &lt;Term&gt;
+           |  &lt;Term&gt;
+
+&lt;Term&gt;    ::= &lt;Term&gt; * &lt;Factor&gt;
+           |  &lt;Term&gt; / &lt;Factor&gt;
+           |  &lt;Factor&gt;
+
+&lt;Factor&gt;  ::= ( &lt;Expr&gt; )
+           | &lt;Integer&gt;
+
+&lt;Integer&gt; ::= &lt;Digit&gt;+
+
+&lt;Digit&gt;   ::= 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9</code></pre>
+</div><div id="our-parser" class="slide section level2">
+<h1>Our Parser</h1>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">pExpr ::</span> <span class="dt">Parser</span> <span class="dt">Char</span> <span class="dt">ArithExpr</span>
+pExpr <span class="fu">=</span> pChainL ((<span class="dt">Binop</span> <span class="dt">Plus</span>) <span class="fu">&lt;$</span> pSym <span class="ch">&#39;+&#39;</span>
+            <span class="fu">&lt;|&gt;</span>   (<span class="dt">Binop</span> <span class="dt">Minus</span>) <span class="fu">&lt;$</span> pSym <span class="ch">&#39;-&#39;</span>) pTerm
+     <span class="fu">&lt;|&gt;</span> pTerm
+
+<span class="ot">pTerm ::</span> <span class="dt">Parser</span> <span class="dt">Char</span> <span class="dt">ArithExpr</span>
+pTerm <span class="fu">=</span> pChainL ((<span class="dt">Binop</span> <span class="dt">Times</span>) <span class="fu">&lt;$</span> pSym <span class="ch">&#39;*&#39;</span>
+            <span class="fu">&lt;|&gt;</span>  (<span class="dt">Binop</span> <span class="dt">Divide</span>) <span class="fu">&lt;$</span> pSym <span class="ch">&#39;/&#39;</span>) pFactor
+     <span class="fu">&lt;|&gt;</span> pFactor
+
+<span class="ot">pFactor ::</span> <span class="dt">Parser</span> <span class="dt">Char</span> <span class="dt">ArithExpr</span>
+pFactor  <span class="fu">=</span>  pSym <span class="ch">&#39;(&#39;</span> <span class="fu">*&gt;</span> pExpr <span class="fu">&lt;*</span> pSym <span class="ch">&#39;)&#39;</span>
+        <span class="fu">&lt;|&gt;</span> pInteger
+
+<span class="ot">pInteger ::</span> <span class="dt">Parser</span> <span class="dt">Char</span> <span class="dt">ArithExpr</span>
+pInteger <span class="fu">=</span> (<span class="dt">Val</span> <span class="fu">.</span> <span class="fu">read</span>) <span class="fu">&lt;$&gt;</span> pMany1 pDigit
+
+<span class="ot">pDigit ::</span> <span class="dt">Parser</span> <span class="dt">Char</span> <span class="dt">Char</span>
+pDigit <span class="fu">=</span> pSatisfy <span class="fu">isDigit</span></code></pre>
+</div>
+<div id="putting-the-pieces-together" class="titleslide slide section level1"><h1>Putting the Pieces Together</h1></div><div id="parse---compile---run" class="slide section level2">
+<h1>Parse -&gt; Compile -&gt; Run</h1>
+<p>Parsing an expression</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">parse ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">Maybe</span> <span class="dt">ArithExpr</span>
+parse s <span class="fu">=</span> <span class="kw">case</span> (unP pExpr) <span class="fu">.</span> <span class="fu">filter</span> (<span class="fu">not</span> <span class="fu">.</span> <span class="fu">isSpace</span>) s <span class="kw">of</span>
+        [] <span class="ot">-&gt;</span> <span class="kw">Nothing</span>
+        (x<span class="fu">:</span>xs) <span class="ot">-&gt;</span> <span class="kw">Just</span> <span class="fu">$</span> <span class="fu">fst</span> x</code></pre>
+<p>Generating Code</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">codeGen ::</span> <span class="dt">Maybe</span> <span class="dt">ArithExpr</span> <span class="ot">-&gt;</span> <span class="dt">Program</span>
+codeGen mt <span class="fu">=</span> <span class="kw">case</span> mt <span class="kw">of</span>
+        <span class="kw">Nothing</span> <span class="ot">-&gt;</span> []
+        <span class="kw">Just</span> t <span class="ot">-&gt;</span> compile t</code></pre>
+<p>Evaluation</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">eval ::</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">Maybe</span> <span class="dt">Integer</span>
+eval <span class="fu">=</span> run <span class="fu">.</span> codeGen <span class="fu">.</span> parse</code></pre>
+</div><div id="main" class="slide section level2">
+<h1>Main</h1>
+<p>A driver for our calculator program</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">main ::</span> <span class="dt">IO</span> ()
+main <span class="fu">=</span> <span class="kw">do</span>
+    <span class="fu">putStrLn</span> <span class="st">&quot;Enter an arithmetic expression to be evaluated: &quot;</span>
+    s <span class="ot">&lt;-</span> <span class="fu">getLine</span>
+    <span class="kw">case</span> eval s <span class="kw">of</span> 
+        <span class="kw">Nothing</span> <span class="ot">-&gt;</span> <span class="fu">putStrLn</span> <span class="st">&quot;Something went wrong.&quot;</span>
+        <span class="kw">Just</span> n <span class="ot">-&gt;</span> <span class="fu">putStrLn</span> <span class="fu">$</span> <span class="fu">show</span> n
+    main</code></pre>
+</div>
+<div id="the-end" class="titleslide slide section level1"><h1>The End</h1></div><div id="references" class="slide section level2">
+<h1>References</h1>
+<p>S. Doaitse Swierstra. 2009. Combinator Parsing: A Short Tutorial.</p>
+<p>This is a great and readable paper on implementing parser combinators that doesn't require a very deep background in haskell.</p>
+</div>
+</body>
+</html>
