@@ -304,6 +304,17 @@ match r (c<span class="fu">:</span>cs) <span class="fu">=</span> match (derivati
           <span class="fu">|</span> <span class="dt">Branch</span> [<span class="dt">Code</span>] [<span class="dt">Code</span>] [<span class="dt">Code</span>]
           <span class="fu">|</span> <span class="dt">Print</span> </code></pre>
 </div>
+<div id="values-in-the-cek-machine" class="slide section level1">
+<h1>Values in the CEK Machine</h1>
+<p>When we run a program on the CEK machine what is the result?</p>
+<ul class="incremental">
+<li>A closure</li>
+<li><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">data</span> <span class="dt">Clos</span> <span class="fu">=</span> <span class="dt">Clos</span> (<span class="dt">Val</span>,[<span class="dt">Code</span>],<span class="dt">Env</span>)
+<span class="kw">data</span> <span class="dt">Val</span> <span class="fu">=</span> <span class="dt">VNum</span> <span class="dt">Integer</span>
+         <span class="fu">|</span> <span class="dt">VVar</span> <span class="dt">Name</span>
+         <span class="fu">|</span> <span class="dt">VBool</span> <span class="dt">Bool</span></code></pre></li>
+</ul>
+</div>
 <div id="continuations" class="slide section level1">
 <h1>Continuations</h1>
 <p>Our CEK machine will build continuations for all &quot;complex&quot; expressions</p>
@@ -312,6 +323,8 @@ match r (c<span class="fu">:</span>cs) <span class="fu">=</span> match (derivati
 <li>It keeps track of the next step of evaluation</li>
 </ul>
 <ul class="incremental">
+<li>So what do we consider a &quot;complex&quot; expression?</li>
+<li>Expressions which are not immediate values.</li>
 <li><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">data</span> <span class="dt">Cont</span> <span class="fu">=</span> <span class="dt">MT</span>
           <span class="fu">|</span> <span class="dt">FN</span> <span class="dt">Clos</span> <span class="dt">Cont</span>
           <span class="fu">|</span> <span class="dt">AR</span> [<span class="dt">Code</span>] <span class="dt">Env</span> <span class="dt">Cont</span>
@@ -319,6 +332,42 @@ match r (c<span class="fu">:</span>cs) <span class="fu">=</span> match (derivati
           <span class="fu">|</span> <span class="dt">IFC</span> [<span class="dt">Code</span>] [<span class="dt">Code</span>] <span class="dt">Env</span> <span class="dt">Cont</span>
           <span class="fu">|</span> <span class="dt">PrintC</span>  <span class="dt">Cont</span>
           <span class="kw">deriving</span>(<span class="kw">Show</span>)</code></pre></li>
+</ul>
+</div>
+<div id="evaluation-on-the-cek-machine" class="slide section level1">
+<h1>Evaluation on the CEK Machine</h1>
+<ul>
+<li><p>The CEK machine is a state machine with transition rules.</p></li>
+<li><p>The transitions are driven by two mutually recursive functions.</p></li>
+</ul>
+</div>
+<div id="eval3-on-the-cek-machine" class="slide section level1">
+<h1>Eval3 on the CEK Machine</h1>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">type</span> <span class="dt">MachineState</span> <span class="fu">=</span> ([<span class="dt">Code</span>],<span class="dt">Env</span>,<span class="dt">Cont</span>,[<span class="dt">String</span>])</code></pre>
+<ul class="incremental">
+<li><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">eval3 ::</span> <span class="dt">MachineState</span> <span class="ot">-&gt;</span> (<span class="dt">Clos</span>,[<span class="dt">String</span>])</code></pre></li>
+<li><pre class="sourceCode haskell"><code class="sourceCode haskell">eval3 (<span class="dt">Access</span> x<span class="fu">:</span>c,e,k,o) <span class="fu">=</span> eval2 (k,envLookup e x,o)</code></pre></li>
+<li><pre class="sourceCode haskell"><code class="sourceCode haskell">eval3 (<span class="dt">PushI</span> n<span class="fu">:</span>c,e,k,o) <span class="fu">=</span> eval2 (k,<span class="dt">Clos</span> (<span class="dt">VNum</span> n,[],[]),o)</code></pre></li>
+<li><pre class="sourceCode haskell"><code class="sourceCode haskell">eval3 (<span class="dt">PushB</span> b<span class="fu">:</span>c,e,k,o) <span class="fu">=</span> eval2 (k,<span class="dt">Clos</span>(<span class="dt">VBool</span> b,[],[]),o)</code></pre></li>
+<li><pre class="sourceCode haskell"><code class="sourceCode haskell">eval3 (<span class="dt">Close</span> x c&#39;<span class="fu">:</span>c,e,k,o) <span class="fu">=</span> eval2 (k,<span class="dt">Clos</span> (<span class="dt">VVar</span> x,c&#39;,e),o)</code></pre></li>
+<li><pre class="sourceCode haskell"><code class="sourceCode haskell">eval3 (<span class="dt">Push</span> c&#39;<span class="fu">:</span>c,e,k,o) <span class="fu">=</span> eval3 (c,e,<span class="dt">AR</span> c&#39; e k,o)</code></pre></li>
+<li><pre class="sourceCode haskell"><code class="sourceCode haskell">eval3 (<span class="dt">OpC</span> op<span class="fu">:</span><span class="dt">Load</span> c<span class="fu">:</span>c&#39;,e,k,o) <span class="fu">=</span> eval3 (c,e,<span class="dt">OP</span> op [] c&#39; e k,o) </code></pre></li>
+<li><pre class="sourceCode haskell"><code class="sourceCode haskell">eval3 (<span class="dt">Branch</span> b c1 c2 <span class="fu">:</span>c,e,k,o) <span class="fu">=</span> eval3 (b,e,<span class="dt">IFC</span> c1 c2 e k,o)</code></pre></li>
+<li><pre class="sourceCode haskell"><code class="sourceCode haskell">eval3 (<span class="dt">Print</span><span class="fu">:</span>c,e,k,o) <span class="fu">=</span> eval3 (c,e,<span class="dt">PrintC</span> k,o)</code></pre></li>
+</ul>
+</div>
+<div id="eval2-on-the-cek-machine" class="slide section level1">
+<h1>Eval2 on the CEK Machine</h1>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">type</span> <span class="dt">ContState</span> <span class="fu">=</span> (<span class="dt">Cont</span>,<span class="dt">Clos</span>,[<span class="dt">String</span>])</code></pre>
+<ul class="incremental">
+<li><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">eval2 ::</span> <span class="dt">ContState</span> <span class="ot">-&gt;</span> (<span class="dt">Clos</span>,[<span class="dt">String</span>])</code></pre></li>
+<li><pre class="sourceCode haskell"><code class="sourceCode haskell">eval2 (<span class="dt">AR</span> c e k,v,o) <span class="fu">=</span> eval3 (c,e,<span class="dt">FN</span> v k,o)</code></pre></li>
+<li><pre class="sourceCode haskell"><code class="sourceCode haskell">eval2 (<span class="dt">FN</span> (<span class="dt">Clos</span> (<span class="dt">VVar</span> x,c,e)) k,v,o) <span class="fu">=</span> eval3 (c,update e x v,k,o)</code></pre></li>
+<li><pre class="sourceCode haskell"><code class="sourceCode haskell">eval2 (<span class="dt">OP</span> op vs (<span class="dt">Load</span> c<span class="fu">:</span>c&#39;) e k, v,o) <span class="fu">=</span> eval3 (c,e,<span class="dt">OP</span> op (v<span class="fu">:</span>vs) c&#39; e k,o) </code></pre></li>
+<li><pre class="sourceCode haskell"><code class="sourceCode haskell">eval2 (<span class="dt">OP</span> op vs c e k,v,o) <span class="fu">=</span> eval2 (k,<span class="dt">Clos</span> (applyOp op (getVal (<span class="fu">head</span> vs)) (getVal v),[],[]),o)</code></pre></li>
+<li><pre class="sourceCode haskell"><code class="sourceCode haskell">eval2 (<span class="dt">MT</span>,v,o) <span class="fu">=</span> (v,o)</code></pre></li>
+<li><pre class="sourceCode haskell"><code class="sourceCode haskell">eval2 (<span class="dt">IFC</span> c1 c2 e k,v,o) <span class="fu">=</span> eval3 (<span class="kw">if</span> truthy v <span class="kw">then</span> c1 <span class="kw">else</span> c2,e,k,o)</code></pre></li>
+<li><pre class="sourceCode haskell"><code class="sourceCode haskell">eval2 (<span class="dt">PrintC</span> k,v,o) <span class="fu">=</span> eval2 (k,v, printClos v o) </code></pre></li>
 </ul>
 </div>
 </body>

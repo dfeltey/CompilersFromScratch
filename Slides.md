@@ -304,6 +304,18 @@ data Code = Push [Code]
           | Print 
 ~~~
 
+# Values in the CEK Machine
+
+When we run a program on the CEK machine what is the result?
+
+> - A closure
+> - ~~~haskell
+data Clos = Clos (Val,[Code],Env)
+data Val = VNum Integer
+         | VVar Name
+         | VBool Bool
+~~~
+
 
 # Continuations
 
@@ -312,6 +324,8 @@ Our CEK machine will build continuations for all "complex" expressions
 - The (K)ontinuation register is a stack of continuations
 - It keeps track of the next step of evaluation
 
+> - So what do we consider a "complex" expression?
+> - Expressions which are not immediate values.
 > - ~~~haskell
 data Cont = MT
           | FN Clos Cont
@@ -322,11 +336,77 @@ data Cont = MT
           deriving(Show)
 ~~~
 
+# Evaluation on the CEK Machine
+
+- The CEK machine is a state machine with transition rules.
+
+- The transitions are driven by two mutually recursive functions.
+
+# Eval3 on the CEK Machine
+
+~~~haskell
+type MachineState = ([Code],Env,Cont,[String])
+~~~
+
+> - ~~~haskell
+eval3 :: MachineState -> (Clos,[String])
+~~~
+> - ~~~haskell
+eval3 (Access x:c,e,k,o) = eval2 (k,envLookup e x,o)
+~~~
+> - ~~~haskell
+eval3 (PushI n:c,e,k,o) = eval2 (k,Clos (VNum n,[],[]),o)
+~~~
+> - ~~~haskell
+eval3 (PushB b:c,e,k,o) = eval2 (k,Clos(VBool b,[],[]),o)
+~~~
+> - ~~~haskell
+eval3 (Close x c':c,e,k,o) = eval2 (k,Clos (VVar x,c',e),o)
+~~~
+> - ~~~haskell
+eval3 (Push c':c,e,k,o) = eval3 (c,e,AR c' e k,o)
+~~~
+> - ~~~haskell
+eval3 (OpC op:Load c:c',e,k,o) = eval3 (c,e,OP op [] c' e k,o) 
+~~~
+> - ~~~haskell
+eval3 (Branch b c1 c2 :c,e,k,o) = eval3 (b,e,IFC c1 c2 e k,o)
+~~~
+> - ~~~haskell
+eval3 (Print:c,e,k,o) = eval3 (c,e,PrintC k,o)
+~~~
 
 
+# Eval2 on the CEK Machine
 
+~~~haskell
+type ContState = (Cont,Clos,[String])
+~~~
 
-
+> - ~~~haskell
+eval2 :: ContState -> (Clos,[String])
+~~~
+> - ~~~haskell
+eval2 (AR c e k,v,o) = eval3 (c,e,FN v k,o)
+~~~
+> - ~~~haskell
+eval2 (FN (Clos (VVar x,c,e)) k,v,o) = eval3 (c,update e x v,k,o)
+~~~
+> - ~~~haskell
+eval2 (OP op vs (Load c:c') e k, v,o) = eval3 (c,e,OP op (v:vs) c' e k,o) 
+~~~
+> - ~~~haskell
+eval2 (OP op vs c e k,v,o) = eval2 (k,Clos (applyOp op (getVal (head vs)) (getVal v),[],[]),o)
+~~~
+> - ~~~haskell
+eval2 (MT,v,o) = (v,o)
+~~~
+> - ~~~haskell
+eval2 (IFC c1 c2 e k,v,o) = eval3 (if truthy v then c1 else c2,e,k,o)
+~~~
+> - ~~~haskell
+eval2 (PrintC k,v,o) = eval2 (k,v, printClos v o) 
+~~~
 
 
 
