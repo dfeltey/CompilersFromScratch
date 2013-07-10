@@ -1,0 +1,250 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN"
+ "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta http-equiv="Content-Style-Type" content="text/css" />
+  <meta name="generator" content="pandoc" />
+  <meta name="author" content="Daniel Feltey" />
+  <meta name="date" content="2013-07-10" />
+  <title>Compilers From Scratch</title>
+  <style type="text/css">code{white-space: pre;}</style>
+  <style type="text/css">
+table.sourceCode, tr.sourceCode, td.lineNumbers, td.sourceCode {
+  margin: 0; padding: 0; vertical-align: baseline; border: none; }
+table.sourceCode { width: 100%; line-height: 100%; }
+td.lineNumbers { text-align: right; padding-right: 4px; padding-left: 4px; color: #aaaaaa; border-right: 1px solid #aaaaaa; }
+td.sourceCode { padding-left: 5px; }
+code > span.kw { color: #007020; font-weight: bold; }
+code > span.dt { color: #902000; }
+code > span.dv { color: #40a070; }
+code > span.bn { color: #40a070; }
+code > span.fl { color: #40a070; }
+code > span.ch { color: #4070a0; }
+code > span.st { color: #4070a0; }
+code > span.co { color: #60a0b0; font-style: italic; }
+code > span.ot { color: #007020; }
+code > span.al { color: #ff0000; font-weight: bold; }
+code > span.fu { color: #06287e; }
+code > span.er { color: #ff0000; font-weight: bold; }
+  </style>
+  <link rel="stylesheet" type="text/css" media="screen, projection, print"
+    href="http://www.w3.org/Talks/Tools/Slidy2/styles/slidy.css" />
+  <script src="http://www.w3.org/Talks/Tools/Slidy2/scripts/slidy.js.gz"
+    charset="utf-8" type="text/javascript"></script>
+</head>
+<body>
+<div class="slide titlepage">
+  <h1 class="title">Compilers From Scratch</h1>
+  <p class="author">
+Daniel Feltey
+  </p>
+  <p class="date">July 10, 2013</p>
+</div>
+<div id="the-compilation-process" class="slide section level1">
+<h1>The Compilation Process</h1>
+<p>A typical workflow</p>
+<p>Source Code -&gt; Lexer -&gt; Parser -&gt; Code Generator -&gt; Machine Code</p>
+</div>
+<div id="outline" class="slide section level1">
+<h1>Outline</h1>
+<ul>
+<li>Regular Expressions</li>
+<li>Lexing</li>
+<li>Parsing</li>
+<li>Desugaring</li>
+<li>The CEK machine</li>
+<li>Code Generation</li>
+</ul>
+</div>
+<div id="regular-expressions" class="slide section level1">
+<h1>Regular Expressions</h1>
+<p>3 Basic operations</p>
+<ul>
+<li>Alternation</li>
+<li>Concatenation or sequencing</li>
+<li>Repetition or Kleene Star</li>
+</ul>
+<p>Additionally</p>
+<ul>
+<li>Symbols</li>
+<li>Epsilon: The empty string</li>
+<li>Null: The empty language</li>
+</ul>
+</div>
+<div id="regular-expressions-in-haskell" class="slide section level1">
+<h1>Regular Expressions in Haskell</h1>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">data</span> <span class="dt">RegEx</span> c <span class="fu">=</span> <span class="dt">Null</span>
+             <span class="fu">|</span> <span class="dt">Eps</span>
+             <span class="fu">|</span> <span class="dt">Sym</span> c
+             <span class="fu">|</span> <span class="dt">Alt</span> (<span class="dt">RegEx</span> c) (<span class="dt">RegEx</span> c)
+             <span class="fu">|</span> <span class="dt">Seq</span> (<span class="dt">RegEx</span> c) (<span class="dt">RegEx</span> c)
+             <span class="fu">|</span> <span class="dt">Star</span> (<span class="dt">RegEx</span> c)</code></pre>
+<ul class="incremental">
+<li>This is fine, but how do we represent a regex that matches any number?</li>
+</ul>
+<ul class="incremental">
+<li><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="dt">Alt</span> (<span class="dt">Sym</span> <span class="ch">&#39;1&#39;</span>) (<span class="dt">Alt</span> (<span class="dt">Sym</span> <span class="ch">&#39;2&#39;</span>) (<span class="dt">Alt</span> (<span class="dt">Sym</span> <span class="ch">&#39;3&#39;</span>) (<span class="dt">Alt</span> (<span class="dt">Sym</span> <span class="ch">&#39;4&#39;</span>) (<span class="dt">Alt</span> (<span class="dt">Sym</span> <span class="ch">&#39;5&#39;</span>) <span class="fu">...</span>))))</code></pre></li>
+</ul>
+</div>
+<div id="a-slight-modification" class="slide section level1">
+<h1>A Slight Modification</h1>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">data</span> <span class="dt">RegEx</span> c <span class="fu">=</span> <span class="dt">Null</span>
+             <span class="fu">|</span> <span class="dt">Eps</span>
+             <span class="fu">|</span> <span class="dt">Sym</span> (c <span class="ot">-&gt;</span> <span class="dt">Bool</span>)
+             <span class="fu">|</span> <span class="dt">Alt</span> (<span class="dt">RegEx</span> c) (<span class="dt">RegEx</span> c)
+             <span class="fu">|</span> <span class="dt">Seq</span> (<span class="dt">RegEx</span> c) (<span class="dt">RegEx</span> c)
+             <span class="fu">|</span> <span class="dt">Star</span> (<span class="dt">RegEx</span> c)</code></pre>
+<ul class="incremental">
+<li>We add boolean &quot;weights&quot; to the symbols.</li>
+</ul>
+<ul class="incremental">
+<li>Now to represent a regex for any digit character</li>
+</ul>
+<ul class="incremental">
+<li><pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">import</span> Data.Char
+<span class="dt">Sym</span> (<span class="fu">isDigit</span>)</code></pre></li>
+</ul>
+</div>
+<div id="matching-strings" class="slide section level1">
+<h1>Matching Strings</h1>
+<p>Two approaches</p>
+<ul>
+<li><p>Destructure a string like a regex</p></li>
+<li><p>Destructure a regex like a string</p></li>
+</ul>
+</div>
+<div id="regex-derivatives" class="slide section level1">
+<h1>RegEx Derivatives</h1>
+<p>Decomposing a regex</p>
+<ul>
+<li>Match one character at a time like a list or Haskell String</li>
+<li>Take derivatives</li>
+</ul>
+<pre><code>             D_c    
+Null       -- c --&gt;  Null
+Eps        -- c --&gt;  Null
+Sym p      -- c --&gt;  if p c then Eps else Null
+Alt r1 r2  -- c --&gt;  Alt (D_c r1) (D_c r2)
+Seq r1 r2  -- c --&gt;  Alt (Seq (D_c r1) r2) (Seq (empty r1) (D_c r2))
+Star r     -- c --&gt;  Eps</code></pre>
+</div>
+<div id="empty" class="slide section level1">
+<h1>Empty</h1>
+<p>What is empty?</p>
+<pre><code>empty Null = Null
+empty Eps = Eps
+empty (Sym _) = Null
+empty (Alt r1 r2) = Alt (empty r1) (empty r2)
+empty (Seq r1 r2) = Seq (empty r1) (empty r2)
+empty (Star _) = Eps</code></pre>
+<ul>
+<li>Not implemented like this, but close enough</li>
+</ul>
+</div>
+<div id="matching" class="slide section level1">
+<h1>Matching</h1>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="ot">match ::</span> <span class="dt">RegEx</span> <span class="dt">Char</span> <span class="ot">-&gt;</span> <span class="dt">String</span> <span class="ot">-&gt;</span> <span class="dt">Bool</span>
+match r [] <span class="fu">=</span> empty r
+match r (c<span class="fu">:</span>cs) <span class="fu">=</span> match (derivative c r) cs</code></pre>
+<ul>
+<li>Lex with a list of (regex,String-&gt;token) pairs</li>
+<li>Take as many derivatives as possible then apply the function</li>
+</ul>
+</div>
+<div id="an-enriched-lambda-calculus" class="slide section level1">
+<h1>An Enriched Lambda Calculus</h1>
+<p>The Language we are implementing</p>
+<pre><code>&lt;SExpr&gt; : ( &lt;SExpr&gt; &lt;SExpr&gt; )
+        | (lambda &lt;Var&gt; &lt;SExpr&gt; )
+        | (&lt;Binop&gt; &lt;SExpr&gt; &lt;SExpr&gt; )
+        | (if &lt;SExpr&gt; &lt;SExpr&gt; &lt;SExpr&gt; )
+        | (let ( &lt;Var&gt; &lt;SExpr&gt; ) &lt;SExpr&gt; )
+        | (print &lt;SExpr&gt; )
+        | &lt;Var&gt;
+        | &lt;Int&gt;
+        | &lt;Bool&gt;
+
+&lt;Var&gt;   : [a-zA-Z]+
+&lt;Int&gt;   : [0-9]+
+&lt;Bool&gt;  : True | False
+&lt;Binop&gt; : + | - | * | / | = | &lt; | &gt; | &lt;= | &gt;=
+        | % | and | or</code></pre>
+</div>
+<div id="abstract-syntax-in-haskell" class="slide section level1">
+<h1>Abstract Syntax in Haskell</h1>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">data</span> <span class="dt">SExpr</span> <span class="fu">=</span> <span class="dt">AppS</span> <span class="dt">SExpr</span> <span class="dt">SExpr</span>
+          <span class="fu">|</span> <span class="dt">LambdaS</span> <span class="dt">Name</span> <span class="dt">SExpr</span>
+          <span class="fu">|</span> <span class="dt">BinopS</span> <span class="dt">Op</span> <span class="dt">SExpr</span> <span class="dt">SExpr</span>
+          <span class="fu">|</span> <span class="dt">VarS</span> <span class="dt">Name</span>
+          <span class="fu">|</span> <span class="dt">ValS</span> <span class="dt">Integer</span>
+          <span class="fu">|</span> <span class="dt">BoolS</span> <span class="dt">Bool</span>
+          <span class="fu">|</span> <span class="dt">IFS</span> <span class="dt">SExpr</span> <span class="dt">SExpr</span> <span class="dt">SExpr</span>
+          <span class="fu">|</span> <span class="dt">LetS</span> (<span class="dt">Name</span>,<span class="dt">SExpr</span>) <span class="dt">SExpr</span> 
+          <span class="fu">|</span> <span class="dt">PrintS</span> <span class="dt">SExpr</span></code></pre>
+</div>
+<div id="challenge" class="slide section level1">
+<h1>Challenge</h1>
+<ul>
+<li>Create a token data type for this language</li>
+<li>Specify a lexer</li>
+</ul>
+<p>Exercises: https://www.fpcomplete.com/user/dfeltey/compilers-from-scratch</p>
+</div>
+<div id="desugaring" class="slide section level1">
+<h1>Desugaring</h1>
+<p>Recall:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">data</span> <span class="dt">SExpr</span> <span class="fu">=</span> <span class="dt">AppS</span> <span class="dt">SExpr</span> <span class="dt">SExpr</span>
+          <span class="fu">|</span> <span class="dt">LambdaS</span> <span class="dt">Name</span> <span class="dt">SExpr</span>
+          <span class="fu">|</span> <span class="dt">BinopS</span> <span class="dt">Op</span> <span class="dt">SExpr</span> <span class="dt">SExpr</span>
+          <span class="fu">|</span> <span class="dt">VarS</span> <span class="dt">Name</span>
+          <span class="fu">|</span> <span class="dt">ValS</span> <span class="dt">Integer</span>
+          <span class="fu">|</span> <span class="dt">BoolS</span> <span class="dt">Bool</span>
+          <span class="fu">|</span> <span class="dt">IFS</span> <span class="dt">SExpr</span> <span class="dt">SExpr</span> <span class="dt">SExpr</span>
+          <span class="fu">|</span> <span class="dt">LetS</span> (<span class="dt">Name</span>,<span class="dt">SExpr</span>) <span class="dt">SExpr</span> 
+          <span class="fu">|</span> <span class="dt">PrintS</span> <span class="dt">SExpr</span></code></pre>
+<ul>
+<li>Is this more than we need?</li>
+</ul>
+</div>
+<div id="a-smaller-language" class="slide section level1">
+<h1>A Smaller Language</h1>
+<p>Consider:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">data</span> <span class="dt">Expr</span> <span class="fu">=</span> <span class="dt">App</span> <span class="dt">Expr</span> <span class="dt">Expr</span>
+          <span class="fu">|</span> <span class="dt">Lambda</span> <span class="dt">Name</span> <span class="dt">Expr</span>
+          <span class="fu">|</span> <span class="dt">Binop</span> <span class="dt">Op</span> <span class="dt">Expr</span> <span class="dt">Expr</span>
+          <span class="fu">|</span> <span class="dt">Var</span> <span class="dt">Name</span>
+          <span class="fu">|</span> <span class="dt">Val</span> <span class="dt">Integer</span>
+          <span class="fu">|</span> <span class="dt">BoolE</span> <span class="dt">Bool</span>
+          <span class="fu">|</span> <span class="dt">IF</span> <span class="dt">Expr</span> <span class="dt">Expr</span> <span class="dt">Expr</span>
+          <span class="fu">|</span> <span class="dt">PrintE</span> <span class="dt">Expr</span> 
+          <span class="kw">deriving</span>(<span class="kw">Show</span>)</code></pre>
+<ul>
+<li>Is this language as expressive as the old one?</li>
+<li>Write a function to convert between SExprs and Exprs.</li>
+</ul>
+</div>
+<div id="the-cek-machine" class="slide section level1">
+<h1>The CEK Machine</h1>
+<ul>
+<li>A mechanical model of the lambda calculus</li>
+<li>A &quot;register&quot; machine with 3 registers</li>
+<li>(C)ontrol (E)nvironment (K)ontinuation</li>
+</ul>
+</div>
+<div id="our-language-again" class="slide section level1">
+<h1>Our Language again</h1>
+<p>Recall the desugared language:</p>
+<pre class="sourceCode haskell"><code class="sourceCode haskell"><span class="kw">data</span> <span class="dt">Expr</span> <span class="fu">=</span> <span class="dt">App</span> <span class="dt">Expr</span> <span class="dt">Expr</span>
+          <span class="fu">|</span> <span class="dt">Lambda</span> <span class="dt">Name</span> <span class="dt">Expr</span>
+          <span class="fu">|</span> <span class="dt">Binop</span> <span class="dt">Op</span> <span class="dt">Expr</span> <span class="dt">Expr</span>
+          <span class="fu">|</span> <span class="dt">Var</span> <span class="dt">Name</span>
+          <span class="fu">|</span> <span class="dt">Val</span> <span class="dt">Integer</span>
+          <span class="fu">|</span> <span class="dt">BoolE</span> <span class="dt">Bool</span>
+          <span class="fu">|</span> <span class="dt">IF</span> <span class="dt">Expr</span> <span class="dt">Expr</span> <span class="dt">Expr</span>
+          <span class="fu">|</span> <span class="dt">PrintE</span> <span class="dt">Expr</span> 
+          <span class="kw">deriving</span>(<span class="kw">Show</span>)</code></pre>
+</div>
+</body>
+</html>
