@@ -365,9 +365,9 @@ match r (c<span class="fu">:</span>cs) <span class="fu">=</span> match (derivati
 <li><pre class="sourceCode haskell"><code class="sourceCode haskell">eval2 (<span class="dt">FN</span> (<span class="dt">Clos</span> (<span class="dt">VVar</span> x,c,e)) k,v,o) <span class="fu">=</span> eval3 (c,update e x v,k,o)</code></pre></li>
 <li><pre class="sourceCode haskell"><code class="sourceCode haskell">eval2 (<span class="dt">OP</span> op vs (<span class="dt">Load</span> c<span class="fu">:</span>c&#39;) e k, v,o) <span class="fu">=</span> eval3 (c,e,<span class="dt">OP</span> op (v<span class="fu">:</span>vs) c&#39; e k,o) </code></pre></li>
 <li><pre class="sourceCode haskell"><code class="sourceCode haskell">eval2 (<span class="dt">OP</span> op vs c e k,v,o) <span class="fu">=</span> eval2 (k,<span class="dt">Clos</span> (applyOp op (getVal (<span class="fu">head</span> vs)) (getVal v),[],[]),o)</code></pre></li>
-<li><pre class="sourceCode haskell"><code class="sourceCode haskell">eval2 (<span class="dt">MT</span>,v,o) <span class="fu">=</span> (v,o)</code></pre></li>
 <li><pre class="sourceCode haskell"><code class="sourceCode haskell">eval2 (<span class="dt">IFC</span> c1 c2 e k,v,o) <span class="fu">=</span> eval3 (<span class="kw">if</span> truthy v <span class="kw">then</span> c1 <span class="kw">else</span> c2,e,k,o)</code></pre></li>
 <li><pre class="sourceCode haskell"><code class="sourceCode haskell">eval2 (<span class="dt">PrintC</span> k,v,o) <span class="fu">=</span> eval2 (k,v, printClos v o) </code></pre></li>
+<li><pre class="sourceCode haskell"><code class="sourceCode haskell">eval2 (<span class="dt">MT</span>,v,o) <span class="fu">=</span> (v,o)</code></pre></li>
 </ul>
 </div>
 </body>

@@ -399,15 +399,14 @@ eval2 (OP op vs (Load c:c') e k, v,o) = eval3 (c,e,OP op (v:vs) c' e k,o)
 eval2 (OP op vs c e k,v,o) = eval2 (k,Clos (applyOp op (getVal (head vs)) (getVal v),[],[]),o)
 ~~~
 > - ~~~haskell
-eval2 (MT,v,o) = (v,o)
-~~~
-> - ~~~haskell
 eval2 (IFC c1 c2 e k,v,o) = eval3 (if truthy v then c1 else c2,e,k,o)
 ~~~
 > - ~~~haskell
 eval2 (PrintC k,v,o) = eval2 (k,v, printClos v o) 
 ~~~
-
+> - ~~~haskell
+eval2 (MT,v,o) = (v,o)
+~~~
 
 
 
