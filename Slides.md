@@ -1,6 +1,12 @@
 % Compilers From Scratch
-% Daniel Feltey
+% Daniel Feltey (@dfeltey)
 % July 10, 2013
+
+# Slides, Code, and Exercises
+
+GitHub: https://github.com/dfeltey/CompilersFromScratch
+
+School of Haskell: https://www.fpcomplete.com/user/dfeltey/compilers-from-scratch
 
 
 # The Compilation Process
