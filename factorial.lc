@@ -1,0 +1,9 @@
+(let (y (lambda f
+           ((lambda x (x x))
+            (lambda x (f (lambda v ((x x) v)))))))
+  (let (factH (lambda partial
+                       (lambda n (if (= n 0)
+                                       1
+                                       (* n (partial (- n 1)))))))
+    (let (fact (y factH))
+      (print (fact 5)))))
