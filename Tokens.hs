@@ -6,16 +6,9 @@ import Data.Char
 import Prelude hiding (seq)
 import CEK
 
-{-data SExpr = AppS SExpr SExpr
-          | LambdaS Name SExpr
-          | BinopS Op SExpr SExpr
-          | VarS Name
-          | ValS Integer
-          | BoolS Bool
-          | IFS SExpr SExpr SExpr
-          | LetS (Name,SExpr) SExpr 
-          deriving(Show
--}
+lexS :: String -> Either String [Token]
+lexS s = lexer rules s
+
 notSpace :: Token -> Bool
 notSpace SpaceT = False
 notSpace _ = True
@@ -37,9 +30,11 @@ data Token  = LParenT
 			| LetT
 			| ORT
 			| ANDT
+			| IFT
 			| IntT Integer
 			| BoolT Bool
 			| VarT Name
+			| PrintT
 			deriving(Show,Eq)
 
 rules = [  (Sym $ isSpace, const SpaceT)
@@ -59,6 +54,8 @@ rules = [  (Sym $ isSpace, const SpaceT)
 		 , (word "or", const ORT)
 		 , (word "and", const ANDT)
 		 , (word "let", const LetT)
+		 , (word "if", const IFT)
+		 , (word "print", const PrintT)
 		 , (seq (Sym isDigit) (star $ Sym isDigit), IntT . read)
 		 , (word "True" `alt` word "False", BoolT . read)
 		 , (Sym isAlpha `seq` (star $ Sym isAlpha) ,VarT)

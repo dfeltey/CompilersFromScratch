@@ -18,6 +18,7 @@ parseExpr =  parseApp
 		 <|> parseInt
 		 <|> parseIF
 		 <|> parseLet
+		 <|> parsePrint
 
 parseApp :: Parser Token SExpr
 parseApp = wrap $ AppS <$> parseExpr <*> parseExpr
@@ -29,10 +30,13 @@ parseBinop :: Parser Token SExpr
 parseBinop = wrap $ (\opT -> BinopS (fromT opT)) <$> parseOp <*> parseExpr <*> parseExpr
 
 parseIF :: Parser Token SExpr
-parseIF = wrap $ IFS <$> parseExpr <*> parseExpr <*> parseExpr
+parseIF = wrap $ IFS <$> (pSym IFT *> parseExpr) <*> parseExpr <*> parseExpr
 
 parseLet :: Parser Token SExpr
-parseLet = wrap $ (\(VarS x,s) -> LetS (x,s)) <$> (wrap $ (,) <$> parseVar <*> parseExpr) <*> parseExpr 
+parseLet = wrap $ (\(VarS x,s) -> LetS (x,s)) <$> (pSym LetT *> (wrap $ (,) <$> parseVar <*> parseExpr)) <*> parseExpr 
+
+parsePrint :: Parser Token SExpr
+parsePrint = wrap $ PrintS <$> (pSym PrintT *> parseExpr)
 
 
 parseVar :: Parser Token SExpr
