@@ -1,6 +1,8 @@
 CompilersFromScratch
 ====================
 
+https://www.fpcomplete.com/user/dfeltey/compilers-from-scratch
+
 LambdaJam 2013 Workshop
 
 Some resources:
