@@ -35,6 +35,7 @@ data Token  = LParenT
 			| BoolT Bool
 			| VarT Name
 			| PrintT
+			-- | Comment   -- faking comments with Space for now
 			deriving(Show,Eq)
 
 rules = [  (Sym $ isSpace, const SpaceT)
@@ -59,6 +60,7 @@ rules = [  (Sym $ isSpace, const SpaceT)
 		 , (seq (Sym isDigit) (star $ Sym isDigit), IntT . read)
 		 , (word "True" `alt` word "False", BoolT . read)
 		 , (Sym isAlpha `seq` (star $ Sym isAlpha) ,VarT)
+		 , (symC ';' `seq` Star (Sym $ \c -> c /= '\n') `seq` symC '\n',const SpaceT)
 		 ]
 
 
